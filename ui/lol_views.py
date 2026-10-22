@@ -163,11 +163,15 @@ class BuildVariantView(discord.ui.View):
                 button.callback = self._create_callback(idx)
                 self.add_item(button)
 
-        # Botón de enlace directo estilo PoroScout ("Ver en U.GG")
+        # Botones de enlace directo estilo PoroScout ("Ver en U.GG" y "Ver en OP.GG")
         ugg_url = f"https://u.gg/lol/champions/{self.champ_id.lower()}/build"
+        opgg_url = f"https://www.op.gg/champions/{self.champ_id.lower()}/build"
         if self.mode.lower() == "aram":
             ugg_url = f"https://u.gg/lol/champions/aram/{self.champ_id.lower()}-aram"
+            opgg_url = f"https://www.op.gg/modes/aram/{self.champ_id.lower()}/build"
+
         self.add_item(discord.ui.Button(label="Ver en U.GG", url=ugg_url, style=discord.ButtonStyle.link))
+        self.add_item(discord.ui.Button(label="Ver en OP.GG", url=opgg_url, style=discord.ButtonStyle.link))
 
     def _create_callback(self, target_idx: int):
         async def callback(interaction: discord.Interaction):

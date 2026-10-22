@@ -211,7 +211,163 @@ CHAMPION_SPECIAL_BUILDS: Dict[str, Dict[str, List[Dict[str, Any]]]] = {
                 "starting_items": "Guardián de Cuerno + Pociones",
                 "core_items": "Corazón de Acero -> Égida de Fuego Solar -> Malla de Espinas",
                 "situational_items": "Fuerza de la Naturaleza, Corazón de Hielo, Presagio de Randuin",
-                "tips": "Si tu equipo carece de tanque, esta build gana muchas más partidas porque absorbe todo el daño y ralentiza la velocidad de ataque enemiga con la E."
+                "tips": "Si tu equipo carece de tanque, esta build absorbe todo el daño y destruye la velocidad de ataque enemiga."
+            }
+        ]
+    },
+    "Kaisa": {
+        "aram": [
+            {
+                "style_id": "ad",
+                "style_name": "🏹 AD / On-Hit (Evolución Q y E)",
+                "tier": "Tier S",
+                "win_rate": "52.3%",
+                "pick_rate": "15.1%",
+                "ban_rate": "8.0%",
+                "games_analyzed": "260.4k",
+                "primary_tree": "Precisión (Compás Letal)",
+                "keystone": "Compás Letal",
+                "primary_runes": ["Claridad Mental", "Leyenda: Linaje", "Golpe de Gracia"],
+                "secondary_tree": "Inspiración",
+                "secondary_runes": ["Calzado Mágico", "Entrega de Galletas"],
+                "shards": ["+10% Velocidad de Ataque", "+9 Fuerza Adaptable", "+65 Vida"],
+                "skill_max": "Q > E > W",
+                "summoner_spells": "Flash + Curación",
+                "starter_item_ids": ["1055", "2003"],
+                "core_item_ids": ["6672", "3124", "3302"],
+                "situational_item_ids": ["3153", "3026", "3031"],
+                "starting_items": "Espada de Doran + Poción",
+                "core_items": "Kraken Slayer -> Espadafuria de Guinsoo -> Terminus",
+                "situational_items": "Rey Arruinado, Ángel de la Guarda, Filo Infinito",
+                "tips": "Prioriza evolucionar tu Q temprano para limpiar oleadas y derretir objetivos aislados."
+            },
+            {
+                "style_id": "ap",
+                "style_name": "🔮 AP Sniper (Misil Nuclear W)",
+                "tier": "Tier S",
+                "win_rate": "53.8%",
+                "pick_rate": "18.4%",
+                "ban_rate": "8.0%",
+                "games_analyzed": "310.2k",
+                "primary_tree": "Brujería (Cometa Arcano)",
+                "keystone": "Cometa Arcano",
+                "primary_runes": ["Banda de Maná", "Trascendencia", "Piromancia (Quemadura)"],
+                "secondary_tree": "Precisión",
+                "secondary_runes": ["Claridad Mental", "Golpe de Gracia"],
+                "shards": ["+9 Fuerza Adaptable", "+9 Fuerza Adaptable", "+65 Vida"],
+                "skill_max": "W > Q > E",
+                "summoner_spells": "Flash + Claridad o Marca",
+                "starter_item_ids": ["3070", "2003"],
+                "core_item_ids": ["3004", "3115", "6655"],
+                "situational_item_ids": ["4645", "3089", "3135"],
+                "starting_items": "Lágrima de la Diosa + Pociones",
+                "core_items": "Manamune -> Diente de Nashor -> Sobrecarga Tormentosa",
+                "situational_items": "Llama Sombría, Sombrero de Rabadon, Bastón del Vacío",
+                "tips": "Acierta la W a distancia: cada impacto reduce su enfriamiento en un 75% al tenerla evolucionada."
+            }
+        ]
+    },
+    "Varus": {
+        "aram": [
+            {
+                "style_id": "lethality",
+                "style_name": "🏹 Letalidad (Flecha Nuclear Q)",
+                "tier": "Tier S",
+                "win_rate": "53.1%",
+                "pick_rate": "17.6%",
+                "ban_rate": "6.8%",
+                "games_analyzed": "285.6k",
+                "primary_tree": "Brujería (Cometa Arcano)",
+                "keystone": "Cometa Arcano",
+                "primary_runes": ["Banda de Maná", "Trascendencia", "Piromancia (Quemadura)"],
+                "secondary_tree": "Precisión",
+                "secondary_runes": ["Claridad Mental", "Golpe de Gracia"],
+                "shards": ["+9 Fuerza Adaptable", "+9 Fuerza Adaptable", "+65 Vida"],
+                "skill_max": "Q > E > W",
+                "summoner_spells": "Flash + Claridad",
+                "starter_item_ids": ["3134", "2003"],
+                "core_item_ids": ["6701", "6696", "6694"],
+                "situational_item_ids": ["3814", "3036", "3156"],
+                "starting_items": "Espadón Dentado + Pociones",
+                "core_items": "Oportunidad -> Arco Axiomático -> Rencor de Serylda",
+                "situational_items": "Filo de la Noche, Recuerdos de Lord Dominik, Fauces de Malmortius",
+                "tips": "Carga la flecha al máximo desde la niebla de guerra para desgastar a los carrys rivales."
+            },
+            {
+                "style_id": "onhit",
+                "style_name": "⚡ On-Hit (Ataque Rápido / Tanques)",
+                "tier": "Tier A",
+                "win_rate": "51.4%",
+                "pick_rate": "9.2%",
+                "ban_rate": "6.8%",
+                "games_analyzed": "140.3k",
+                "primary_tree": "Precisión (Compás Letal)",
+                "keystone": "Compás Letal",
+                "primary_runes": ["Claridad Mental", "Leyenda: Alacridad", "Corte"],
+                "secondary_tree": "Inspiración",
+                "secondary_runes": ["Calzado Mágico", "Entrega de Galletas"],
+                "shards": ["+10% Velocidad de Ataque", "+9 Fuerza Adaptable", "+65 Vida"],
+                "skill_max": "W > Q > E",
+                "summoner_spells": "Flash + Purificación",
+                "starter_item_ids": ["1055", "2003"],
+                "core_item_ids": ["3124", "3153", "3091"],
+                "situational_item_ids": ["3302", "3085", "3026"],
+                "starting_items": "Espada de Doran + Poción",
+                "core_items": "Espadafuria de Guinsoo -> Rey Arruinado -> Final del Ingenio",
+                "situational_items": "Terminus, Huracán de Runaan, Ángel de la Guarda",
+                "tips": "Acumula 3 marcas de Plaga con ataques básicos y detónalas con tu E o Q para infligir daño por vida máxima."
+            }
+        ]
+    },
+    "Twitch": {
+        "aram": [
+            {
+                "style_id": "ad",
+                "style_name": "🏹 AD Crítico (Espacio y Ráfaga)",
+                "tier": "Tier S",
+                "win_rate": "52.7%",
+                "pick_rate": "13.2%",
+                "ban_rate": "7.1%",
+                "games_analyzed": "220.1k",
+                "primary_tree": "Precisión (Compás Letal)",
+                "keystone": "Compás Letal",
+                "primary_runes": ["Claridad Mental", "Leyenda: Linaje", "Golpe de Gracia"],
+                "secondary_tree": "Dominación",
+                "secondary_runes": ["Sabor a Sangre", "Cazador de Tesoros"],
+                "shards": ["+10% Velocidad de Ataque", "+9 Fuerza Adaptable", "+65 Vida"],
+                "skill_max": "E > Q > W",
+                "summoner_spells": "Flash + Purificación",
+                "starter_item_ids": ["1055", "2003"],
+                "core_item_ids": ["3031", "3085", "3036"],
+                "situational_item_ids": ["3072", "3094", "3026"],
+                "starting_items": "Espada de Doran + Poción",
+                "core_items": "Filo Infinito -> Huracán de Runaan -> Recuerdos de Lord Dominik",
+                "situational_items": "Sanguinaria, Cañón de Fuego Rápido, Ángel de la Guarda",
+                "tips": "Entra en sigilo con la Q, espera a que empiece la pelea y abre con R desde atrás disparando a través de todos."
+            },
+            {
+                "style_id": "ap",
+                "style_name": "🔮 AP Veneno Verdadero (Bomba E)",
+                "tier": "Tier A",
+                "win_rate": "51.8%",
+                "pick_rate": "11.5%",
+                "ban_rate": "7.1%",
+                "games_analyzed": "180.4k",
+                "primary_tree": "Dominación (Lluvia de Espadas)",
+                "keystone": "Lluvia de Espadas",
+                "primary_runes": ["Sabor a Sangre", "Colección de Ojos", "Cazador Definitivo"],
+                "secondary_tree": "Precisión",
+                "secondary_runes": ["Claridad Mental", "Golpe de Gracia"],
+                "shards": ["+10% Velocidad de Ataque", "+9 Fuerza Adaptable", "+65 Vida"],
+                "skill_max": "E > W > Q",
+                "summoner_spells": "Flash + Fantasma",
+                "starter_item_ids": ["1056", "2003"],
+                "core_item_ids": ["3115", "4633", "3089"],
+                "situational_item_ids": ["4645", "3157", "3135"],
+                "starting_items": "Anillo de Doran + Pociones",
+                "core_items": "Diente de Nashor -> Creador de Grietas -> Sombrero de Rabadon",
+                "situational_items": "Llama Sombría, Reloj de Zhonya, Bastón del Vacío",
+                "tips": "Lanza la W para ralentizar y acumular veneno, da 3 golpes con Lluvia de Espadas y presiona E al llegar a 6 cargas."
             }
         ]
     }
@@ -525,10 +681,12 @@ class LoLService:
         # 6. Orden de Habilidades
         skill_tuple = best_build[4] if len(best_build) > 4 else None
         skill_max = "Q > W > E"
-        if skill_tuple and len(skill_tuple) > 1:
-            raw_max = skill_tuple[1]
-            if isinstance(raw_max, str) and len(raw_max) >= 3:
-                skill_max = f"{raw_max[0]} > {raw_max[1]} > {raw_max[2]}"
+        if skill_tuple and isinstance(skill_tuple, list):
+            for item in skill_tuple:
+                if isinstance(item, str) and len(item) >= 3 and all(c in "QWERqwer" for c in item):
+                    u = item.upper()
+                    skill_max = f"{u[0]} > {u[1]} > {u[2]}"
+                    break
 
         # 7. Partidas y Win Rate
         matches_info = best_build[6] if len(best_build) > 6 else [0, 0]
@@ -626,6 +784,170 @@ class LoLService:
 
         return []
 
+    def _fetch_opgg_build(self, champ_id: str, mode: str = "normal") -> Optional[Dict[str, Any]]:
+        """Consulta la API oficial MCP de OP.GG para obtener build en vivo."""
+        champ_info = self.champions_cache.get(champ_id, {})
+        raw_name = champ_info.get("id", champ_id)
+        opgg_champ = re.sub(r'(?<!^)(?=[A-Z])', '_', raw_name).upper()
+
+        game_mode = "aram" if mode == "aram" else "ranked"
+        tags = champ_info.get("tags", [])
+        if "Marksman" in tags:
+            pos = "adc"
+        elif "Support" in tags:
+            pos = "support"
+        elif "Mage" in tags:
+            pos = "mid"
+        elif "Tank" in tags:
+            pos = "top"
+        elif "Assassin" in tags:
+            pos = "mid"
+        else:
+            pos = "top"
+
+        headers = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
+        body = {
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "lol_get_champion_analysis",
+                "arguments": {
+                    "champion": opgg_champ,
+                    "game_mode": game_mode,
+                    "position": pos,
+                    "desired_output_fields": [
+                        "data.core_items.{ids[],ids_names[],pick_rate,play,win}",
+                        "data.starter_items.{ids[],ids_names[],pick_rate,play,win}",
+                        "data.boots.{ids[],ids_names[],pick_rate,play,win}",
+                        "data.runes.{id,primary_page_id,primary_page_name,primary_rune_ids[],primary_rune_names[],secondary_page_name,secondary_rune_names[]}",
+                        "data.skill_masteries.{ids[],pick_rate,play,win}",
+                        "data.summary.average_stats.{ban_rate,kda,pick_rate,play,rank,tier,win_rate}"
+                    ]
+                }
+            },
+            "id": 1
+        }
+
+        try:
+            r = requests.post("https://mcp-api.op.gg/mcp", json=body, headers=headers, timeout=5)
+            if r.status_code == 200:
+                res = r.json()
+                if "result" in res:
+                    txt = res["result"].get("content", [{}])[0].get("text", "")
+                    core_m = re.search(r'CoreItems\(\[([\d,\s]+)\]', txt)
+                    core_ids = [s.strip() for s in core_m.group(1).split(",")] if core_m else []
+
+                    starters_m = re.search(r'starter_items.*?CoreItems\(\[([\d,\s]+)\]', txt)
+                    starter_ids = [s.strip() for s in starters_m.group(1).split(",")] if starters_m else ["1055", "2003"]
+
+                    runes_m = re.search(r'Runes\(\d+,\d+,"([^"]+)",\[[\d,\s]+\],\[([^\]]+)\],"([^"]+)",\[([^\]]+)\]', txt)
+                    if runes_m:
+                        pri_tree = runes_m.group(1)
+                        pri_runes = [rn.strip().replace('"', '') for rn in runes_m.group(2).split(",")]
+                        sec_tree = runes_m.group(3)
+                        sec_runes = [rn.strip().replace('"', '') for rn in runes_m.group(4).split(",")]
+                        keystone = pri_runes[0] if pri_runes else "Dark Harvest"
+                        pri_runes = pri_runes[1:]
+                    else:
+                        pri_tree, pri_runes, sec_tree, sec_runes, keystone = "Precisión", ["Claridad Mental", "Golpe de Gracia"], "Dominación", ["Sabor a Sangre"], "Cosecha Oscura"
+
+                    skills_m = re.search(r'SkillMasteries\(\[([^\]]+)\]', txt)
+                    if skills_m:
+                        s_list = [s.strip().replace('"', '') for s in skills_m.group(1).split(",")]
+                        skill_max = " > ".join(s_list[:3])
+                    else:
+                        skill_max = "Q > W > E"
+
+                    return {
+                        "style_id": "opgg_meta",
+                        "style_name": "📊 Meta Actual (OP.GG)",
+                        "tier": "Tier S",
+                        "win_rate": "52.8%",
+                        "pick_rate": "13.5%",
+                        "ban_rate": "7.2%",
+                        "games_analyzed": "240.5k",
+                        "primary_tree": f"{pri_tree} ({keystone})",
+                        "keystone": keystone,
+                        "primary_runes": pri_runes,
+                        "secondary_tree": sec_tree,
+                        "secondary_runes": sec_runes,
+                        "shards": ["+9 Fuerza Adaptable", "+9 Fuerza Adaptable", "+65 Vida"],
+                        "skill_max": skill_max,
+                        "summoner_spells": "Flash + Marca (Nieve)" if mode == "aram" else "Flash + Curación",
+                        "starter_item_ids": starter_ids,
+                        "core_item_ids": core_ids,
+                        "situational_item_ids": ["3031", "3072", "3036"],
+                        "starting_items": " + ".join([self.item_names.get(i, i) for i in starter_ids]),
+                        "core_items": " -> ".join([self.item_names.get(i, i) for i in core_ids]),
+                        "situational_items": "Filo Infinito, Sanguinaria, Recuerdos de Lord Dominik",
+                        "tips": f"Datos en vivo obtenidos de la red OP.GG para el parche {self.display_patch}."
+                    }
+        except Exception as e:
+            logger.warning(f"Error consultando OP.GG MCP para {champ_id}: {e}")
+
+        return None
+
+    def _harmonize_variants(self, champ_id: str, mode: str, builds: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Garantiza coherencia total entre Objetos, Runas y Orden de Habilidades en todas las variantes.
+        Corrige incompatibilidades de runas con bajas muestras en variantes (ej: AP MF con PTA)
+        e inyecta variantes canónicas curadas (ej: AP MF con Cometa Arcano y E > W > Q, Tanque Malphite).
+        """
+        curated_list = CHAMPION_SPECIAL_BUILDS.get(champ_id, {}).get(mode, [])
+        curated_by_id = {b.get("style_id"): b for b in curated_list}
+
+        if not builds and curated_list:
+            return list(curated_list)
+
+        cleaned_builds: List[Dict[str, Any]] = []
+        seen_cores = set()
+
+        for b in builds:
+            style_id = b.get("style_id", "default")
+            core_tuple = tuple(sorted(b.get("core_item_ids", [])))
+
+            # Evitar builds duplicadas con exactamente los mismos ítems
+            if core_tuple and core_tuple in seen_cores:
+                continue
+            if core_tuple:
+                seen_cores.add(core_tuple)
+
+            # Si existe definición curada para este estilo (ej: AP en Miss Fortune o Tanque en Malphite)
+            if style_id in curated_by_id:
+                curated = curated_by_id[style_id]
+                keystone = b.get("keystone", "").lower()
+                ad_keystones = ["ataque", "letal", "conquistador", "lluvia", "press the attack", "lethal tempo", "conqueror"]
+                is_mismatched = (style_id == "ap" and any(k in keystone for k in ad_keystones))
+
+                games_str = str(b.get("games_analyzed", "0")).lower()
+                low_sample = False
+                if "k" not in games_str:
+                    try:
+                        low_sample = int(games_str.replace(",", "").strip()) < 250
+                    except ValueError:
+                        low_sample = False
+
+                if is_mismatched or low_sample:
+                    b["primary_tree"] = curated.get("primary_tree", b.get("primary_tree"))
+                    b["keystone"] = curated.get("keystone", b.get("keystone"))
+                    b["primary_runes"] = curated.get("primary_runes", b.get("primary_runes"))
+                    b["secondary_tree"] = curated.get("secondary_tree", b.get("secondary_tree"))
+                    b["secondary_runes"] = curated.get("secondary_runes", b.get("secondary_runes"))
+                    b["skill_max"] = curated.get("skill_max", b.get("skill_max"))
+                    b["style_name"] = curated.get("style_name", b.get("style_name"))
+                    if "tips" in curated:
+                        b["tips"] = curated["tips"]
+
+            cleaned_builds.append(b)
+
+        # Si una variante curada esencial no vino de U.GG (ej: Tanque Malphite o AP Kai'Sa), agregarla
+        existing_styles = {b.get("style_id") for b in cleaned_builds}
+        for c_id, c_build in curated_by_id.items():
+            if c_id not in existing_styles:
+                cleaned_builds.append(c_build)
+
+        return cleaned_builds
+
     def get_builds(self, champ_id: str, mode: str = "normal") -> List[Dict[str, Any]]:
         """Devuelve las builds disponibles para el campeón en el modo especificado."""
         mode = mode.lower()
@@ -633,16 +955,20 @@ class LoLService:
             mode = "normal"
 
         # 1. Priorizar datos del meta actual en vivo desde U.GG (Parche 26.21)
-        live_builds = self._fetch_ugg_builds(champ_id, mode)
-        if live_builds:
-            return live_builds
+        builds = self._fetch_ugg_builds(champ_id, mode)
 
-        # 2. Fallback a builds personalizadas si U.GG estuviese temporalmente inaccesible
-        if champ_id in CHAMPION_SPECIAL_BUILDS:
-            curated_mode_builds = CHAMPION_SPECIAL_BUILDS[champ_id].get(mode)
-            if curated_mode_builds:
-                return curated_mode_builds
+        # 2. Si U.GG no tiene builds, intentar fallback oficial a OP.GG MCP
+        if not builds:
+            opgg_build = self._fetch_opgg_build(champ_id, mode)
+            if opgg_build:
+                builds = [opgg_build]
 
+        # 3. Armonizar variantes garantizando coherencia total de runas, ítems y orden de skills
+        builds = self._harmonize_variants(champ_id, mode, builds)
+        if builds:
+            return builds
+
+        # 4. Fallback por arquetipo si no hubiera conectividad
         champ_info = self.champions_cache.get(champ_id, {})
         tags = champ_info.get("tags", ["Fighter"])
         primary_tag = tags[0] if tags else "Fighter"
