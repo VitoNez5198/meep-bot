@@ -4,6 +4,7 @@ Crea y administra dinámicamente Application Emojis en Discord para objetos y ru
 de League of Legends utilizando rotación LRU (máx 48 emojis).
 """
 
+import os
 import io
 import re
 import unicodedata
@@ -19,6 +20,10 @@ from services.lol_service import lol_service
 logger = logging.getLogger("meep.emoji")
 
 DDRAGON_BASE_CDN = "https://ddragon.leagueoflegends.com/cdn"
+CACHE_ITEMS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "cache", "items")
+CACHE_RUNES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "cache", "runes")
+os.makedirs(CACHE_ITEMS_DIR, exist_ok=True)
+os.makedirs(CACHE_RUNES_DIR, exist_ok=True)
 
 
 def _normalize_name(text: str) -> str:
@@ -109,12 +114,23 @@ class EmojiService:
                     except Exception as ex:
                         logger.warning(f"Error eliminando emoji antiguo {oldest_name}: {ex}")
 
-            # Descargar y subir el nuevo emoji
+            # Obtener imagen desde caché local en disco o descargar si faltara
             try:
-                url = f"{DDRAGON_BASE_CDN}/{version}/img/item/{item_id}.png"
-                r = requests.get(url, timeout=5)
-                if r.status_code == 200:
-                    img = Image.open(io.BytesIO(r.content)).convert("RGBA").resize((44, 44))
+                local_path = os.path.join(CACHE_ITEMS_DIR, f"{item_id}.png")
+                img_data = None
+                if os.path.exists(local_path) and os.path.getsize(local_path) > 100:
+                    with open(local_path, "rb") as f:
+                        img_data = f.read()
+                else:
+                    url = f"{DDRAGON_BASE_CDN}/{version}/img/item/{item_id}.png"
+                    r = requests.get(url, timeout=4)
+                    if r.status_code == 200:
+                        img_data = r.content
+                        with open(local_path, "wb") as f:
+                            f.write(img_data)
+
+                if img_data:
+                    img = Image.open(io.BytesIO(img_data)).convert("RGBA").resize((44, 44))
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
                     buf.seek(0)
@@ -170,10 +186,22 @@ class EmojiService:
                         pass
 
             try:
-                url = f"{DDRAGON_BASE_CDN}/img/{icon_path}"
-                r = requests.get(url, timeout=5)
-                if r.status_code == 200:
-                    img = Image.open(io.BytesIO(r.content)).convert("RGBA").resize((44, 44))
+                rune_filename = os.path.basename(icon_path)
+                local_path = os.path.join(CACHE_RUNES_DIR, rune_filename)
+                img_data = None
+                if os.path.exists(local_path) and os.path.getsize(local_path) > 100:
+                    with open(local_path, "rb") as f:
+                        img_data = f.read()
+                else:
+                    url = f"{DDRAGON_BASE_CDN}/img/{icon_path}"
+                    r = requests.get(url, timeout=4)
+                    if r.status_code == 200:
+                        img_data = r.content
+                        with open(local_path, "wb") as f:
+                            f.write(img_data)
+
+                if img_data:
+                    img = Image.open(io.BytesIO(img_data)).convert("RGBA").resize((44, 44))
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
                     buf.seek(0)

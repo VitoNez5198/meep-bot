@@ -316,6 +316,30 @@ CHAMPION_SPECIAL_BUILDS: Dict[str, Dict[str, List[Dict[str, Any]]]] = {
                 "core_items": "Espadafuria de Guinsoo -> Rey Arruinado -> Final del Ingenio",
                 "situational_items": "Terminus, Huracán de Runaan, Ángel de la Guarda",
                 "tips": "Acumula 3 marcas de Plaga con ataques básicos y detónalas con tu E o Q para infligir daño por vida máxima."
+            },
+            {
+                "style_id": "ap",
+                "style_name": "🔮 AP Burst (Detonación Porcentual W)",
+                "tier": "Tier A",
+                "win_rate": "50.8%",
+                "pick_rate": "7.5%",
+                "ban_rate": "6.8%",
+                "games_analyzed": "115.0k",
+                "primary_tree": "Brujería (Cometa Arcano)",
+                "keystone": "Cometa Arcano",
+                "primary_runes": ["Banda de Maná", "Trascendencia", "Piromancia (Quemadura)"],
+                "secondary_tree": "Precisión",
+                "secondary_runes": ["Claridad Mental", "Golpe de Gracia"],
+                "shards": ["+9 Fuerza Adaptable", "+9 Fuerza Adaptable", "+65 Vida"],
+                "skill_max": "W > Q > E",
+                "summoner_spells": "Flash + Claridad",
+                "starter_item_ids": ["1056", "2003"],
+                "core_item_ids": ["3115", "6655", "3089"],
+                "situational_item_ids": ["4645", "3157", "3135"],
+                "starting_items": "Anillo de Doran + Pociones",
+                "core_items": "Diente de Nashor -> Sobrecarga Tormentosa -> Sombrero de Rabadon",
+                "situational_items": "Llama Sombría, Reloj de Zhonya, Bastón del Vacío",
+                "tips": "Aplica 3 marcas de tu W con autoataques y detónalas con una Q cargada para borrar tanques de un solo impacto."
             }
         ]
     },
@@ -894,16 +918,31 @@ class LoLService:
         e inyecta variantes canónicas curadas (ej: AP MF con Cometa Arcano y E > W > Q, Tanque Malphite).
         """
         curated_list = CHAMPION_SPECIAL_BUILDS.get(champ_id, {}).get(mode, [])
-        curated_by_id = {b.get("style_id"): b for b in curated_list}
+        if curated_list:
+            # Los campeones con variantes curadas (Varus, Miss Fortune, Malphite, Kai'Sa, Twitch)
+            # tienen su orden canónico prioritario garantizado:
+            # Posición 0: Build Principal
+            # Posición 1: Build Secundaria
+            # Posición 2: Build Alternativa
+            ordered_builds = []
+            for c in curated_list:
+                b = dict(c)
+                c_style = b.get("style_id")
+                matching_live = next((live for live in builds if live.get("style_id") == c_style), None)
+                if matching_live:
+                    if "k" in str(matching_live.get("games_analyzed", "")):
+                        b["win_rate"] = matching_live.get("win_rate", b["win_rate"])
+                        b["games_analyzed"] = matching_live.get("games_analyzed", b["games_analyzed"])
+                ordered_builds.append(b)
+            return ordered_builds
 
-        if not builds and curated_list:
-            return list(curated_list)
+        if not builds:
+            return []
 
         cleaned_builds: List[Dict[str, Any]] = []
         seen_cores = set()
 
         for b in builds:
-            style_id = b.get("style_id", "default")
             core_tuple = tuple(sorted(b.get("core_item_ids", [])))
 
             # Evitar builds duplicadas con exactamente los mismos ítems
@@ -912,39 +951,7 @@ class LoLService:
             if core_tuple:
                 seen_cores.add(core_tuple)
 
-            # Si existe definición curada para este estilo (ej: AP en Miss Fortune o Tanque en Malphite)
-            if style_id in curated_by_id:
-                curated = curated_by_id[style_id]
-                keystone = b.get("keystone", "").lower()
-                ad_keystones = ["ataque", "letal", "conquistador", "lluvia", "press the attack", "lethal tempo", "conqueror"]
-                is_mismatched = (style_id == "ap" and any(k in keystone for k in ad_keystones))
-
-                games_str = str(b.get("games_analyzed", "0")).lower()
-                low_sample = False
-                if "k" not in games_str:
-                    try:
-                        low_sample = int(games_str.replace(",", "").strip()) < 250
-                    except ValueError:
-                        low_sample = False
-
-                if is_mismatched or low_sample:
-                    b["primary_tree"] = curated.get("primary_tree", b.get("primary_tree"))
-                    b["keystone"] = curated.get("keystone", b.get("keystone"))
-                    b["primary_runes"] = curated.get("primary_runes", b.get("primary_runes"))
-                    b["secondary_tree"] = curated.get("secondary_tree", b.get("secondary_tree"))
-                    b["secondary_runes"] = curated.get("secondary_runes", b.get("secondary_runes"))
-                    b["skill_max"] = curated.get("skill_max", b.get("skill_max"))
-                    b["style_name"] = curated.get("style_name", b.get("style_name"))
-                    if "tips" in curated:
-                        b["tips"] = curated["tips"]
-
             cleaned_builds.append(b)
-
-        # Si una variante curada esencial no vino de U.GG (ej: Tanque Malphite o AP Kai'Sa), agregarla
-        existing_styles = {b.get("style_id") for b in cleaned_builds}
-        for c_id, c_build in curated_by_id.items():
-            if c_id not in existing_styles:
-                cleaned_builds.append(c_build)
 
         return cleaned_builds
 

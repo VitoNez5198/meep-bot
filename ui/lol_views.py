@@ -27,10 +27,12 @@ async def create_champion_embed(
     is_aram = mode.lower() == "aram"
     color = config.COLOR_ARAM if is_aram else config.COLOR_LOL
 
-    # Título estilo PoroScout: [26.21] [Tier S] Champion data for Ahri
-    title = f"[{display_patch}] [{tier}] Datos de campeón para {champ_name}"
+    # Título estilo PoroScout reflejando el estilo activo
+    style_label = build.get("style_name", "Build Principal")
+    clean_style = style_label.split("(")[0].strip() if "(" in style_label else style_label
+    title = f"[{display_patch}] [{tier}] {champ_name} • {clean_style}"
     if is_aram:
-        title = f"[{display_patch}] [{tier}] {champ_name} — Modo ARAM"
+        title = f"[{display_patch}] [{tier}] {champ_name} (ARAM) • {clean_style}"
 
     # Descripción con lore breve y partidas analizadas
     lore = details.get("lore", "")
@@ -147,11 +149,11 @@ class BuildVariantView(discord.ui.View):
         """Genera los botones según las variantes disponibles."""
         self.clear_items()
 
-        # Botones de cambio de estilo (si hay 2 o más estilos)
+        # Nombres de botones limpios y estandarizados solicitados por el usuario
+        standard_labels = ["Build Principal", "Build Secundaria", "Build Alternativa", "Build Opcional"]
         if len(self.builds) > 1:
             for idx, build in enumerate(self.builds):
-                style_name = build.get("style_name", f"Build {idx + 1}")
-                button_label = style_name.split("(")[0].strip() if "(" in style_name else style_name
+                button_label = standard_labels[idx] if idx < len(standard_labels) else f"Build {idx + 1}"
                 is_active = (idx == self.current_index)
 
                 button = discord.ui.Button(

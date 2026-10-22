@@ -27,6 +27,15 @@ class LoLCog(commands.Cog, name="League of Legends"):
         author_id: int = None,
     ):
         """Lógica compartida entre comandos Slash y comandos con prefijo."""
+        # Manejar defer inmediatamente para evitar el timeout de 3 segundos de Discord ("La aplicación no respondió")
+        is_interaction = isinstance(target_message, discord.Interaction)
+        msg_wait = None
+        if is_interaction:
+            if not target_message.response.is_done():
+                await target_message.response.defer()
+        else:
+            msg_wait = await target_message.reply("🔍 Obteniendo datos de campeón...", mention_author=False)
+
         resolved = lol_service.resolve_champion(champ_query)
         if not resolved:
             embed = discord.Embed(
@@ -37,10 +46,10 @@ class LoLCog(commands.Cog, name="League of Legends"):
                 ),
                 color=config.COLOR_ERROR,
             )
-            if isinstance(target_message, discord.Interaction):
-                await target_message.response.send_message(embed=embed, ephemeral=True)
+            if is_interaction:
+                await target_message.followup.send(embed=embed, ephemeral=True)
             else:
-                await target_message.reply(embed=embed, mention_author=False)
+                await msg_wait.edit(content=None, embed=embed)
             return
 
         champ_id, champ_info = resolved
@@ -63,13 +72,6 @@ class LoLCog(commands.Cog, name="League of Legends"):
             for idx, b in enumerate(builds):
                 if pref in b.get("style_id", "").lower() or pref in b.get("style_name", "").lower():
                     current_idx = idx
-        # Manejar defer para evitar timeout de Discord
-        is_interaction = isinstance(target_message, discord.Interaction)
-        msg_wait = None
-        if is_interaction:
-            await target_message.response.defer()
-        else:
-            msg_wait = await target_message.reply("🔍 Obteniendo datos de campeón...", mention_author=False)
 
         # Obtener detalles del campeón (lore y habilidades)
         details = lol_service.get_champion_details(champ_id)
@@ -119,6 +121,7 @@ class LoLCog(commands.Cog, name="League of Legends"):
         modo: Optional[str] = None,
         variante: Optional[str] = None,
     ):
+        await interaction.response.defer()
         await self._handle_champion_query(
             target_message=interaction,
             champ_query=campeon,
@@ -133,9 +136,10 @@ class LoLCog(commands.Cog, name="League of Legends"):
     )
     @app_commands.describe(campeon="Nombre o alias del campeón")
     async def slash_counters(self, interaction: discord.Interaction, campeon: str):
+        await interaction.response.defer()
         resolved = lol_service.resolve_champion(campeon)
         if not resolved:
-            await interaction.response.send_message(f"❌ No se encontró el campeón **{campeon}**.", ephemeral=True)
+            await interaction.followup.send(f"❌ No se encontró el campeón **{campeon}**.", ephemeral=True)
             return
 
         champ_id, champ_info = resolved
@@ -158,7 +162,7 @@ class LoLCog(commands.Cog, name="League of Legends"):
             inline=False,
         )
         embed.set_footer(text="Información calculada para el parche actual")
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
 
     # =========================================================================
     # PREFIX COMMANDS (Texto corto en chat)
