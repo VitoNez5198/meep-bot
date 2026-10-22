@@ -63,12 +63,28 @@ class LoLCog(commands.Cog, name="League of Legends"):
             for idx, b in enumerate(builds):
                 if pref in b.get("style_id", "").lower() or pref in b.get("style_name", "").lower():
                     current_idx = idx
-        # Obtener detalles del campeón (lore y lista de habilidades)
-        details = lol_service.get_champion_details(champ_id)
+        # Manejar defer para evitar timeout de Discord
+        is_interaction = isinstance(target_message, discord.Interaction)
+        msg_wait = None
+        if is_interaction:
+            await target_message.response.defer()
+        else:
+            msg_wait = await target_message.reply("🔍 Obteniendo datos de campeón...", mention_author=False)
 
+        # Obtener detalles del campeón (lore y habilidades)
+        details = lol_service.get_champion_details(champ_id)
         selected_build = builds[current_idx]
-        embed = create_champion_embed(champ_id, champ_name, mode, selected_build, details)
+
+        embed = await create_champion_embed(
+            bot=self.bot,
+            champ_id=champ_id,
+            champ_name=champ_name,
+            mode=mode,
+            build=selected_build,
+            details=details,
+        )
         view = BuildVariantView(
+            bot=self.bot,
             champ_id=champ_id,
             champ_name=champ_name,
             mode=mode,
@@ -78,24 +94,10 @@ class LoLCog(commands.Cog, name="League of Legends"):
             author_id=author_id,
         )
 
-        card_file = generate_build_card_file(
-            version=lol_service.latest_version,
-            starter_item_ids=selected_build.get("starter_item_ids", ["1056", "2003"]),
-            core_item_ids=selected_build.get("core_item_ids", ["226653", "226655", "223157"]),
-            situational_item_ids=selected_build.get("situational_item_ids", ["223089", "3135", "3020"]),
-            spell_icons=details.get("spells", []),
-        )
-
-        if isinstance(target_message, discord.Interaction):
-            if card_file:
-                await target_message.response.send_message(embed=embed, file=card_file, view=view)
-            else:
-                await target_message.response.send_message(embed=embed, view=view)
+        if is_interaction:
+            await target_message.followup.send(embed=embed, view=view)
         else:
-            if card_file:
-                await target_message.reply(embed=embed, file=card_file, view=view, mention_author=False)
-            else:
-                await target_message.reply(embed=embed, view=view, mention_author=False)
+            await msg_wait.edit(content=None, embed=embed, view=view)
 
     # =========================================================================
     # SLASH COMMANDS

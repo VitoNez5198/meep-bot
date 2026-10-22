@@ -1,6 +1,6 @@
 """
-Componentes interactivos de Discord para League of Legends (Diseño estilo PoroScout).
-Incluye tarjeta gráfica de objetos y habilidades generada con Pillow.
+Componentes interactivos de Discord para League of Legends (Diseño exacto estilo PoroScout).
+Utiliza Emojis nativos de Discord para objetos y runas, y código ANSI para colorear habilidades.
 """
 
 from typing import List, Dict, Any, Optional
@@ -8,36 +8,37 @@ import discord
 
 import config
 from services.lol_service import lol_service
-from services.card_service import generate_build_card_file
+from services.emoji_service import get_emoji_service
 
 
-def create_champion_embed(
+async def create_champion_embed(
+    bot: discord.Client,
     champ_id: str,
     champ_name: str,
     mode: str,
     build: Dict[str, Any],
     details: Dict[str, Any],
 ) -> discord.Embed:
-    """Genera un Discord Embed estilizado idéntico al formato de PoroScout/Mobalytics."""
-    is_aram = mode.lower() == "aram"
-    mode_tag = "ARAM" if is_aram else "Grieta"
-    tier = build.get("tier", "Tier S")
+    """Genera un Discord Embed limpio con iconos emoji, idéntico al formato visual de PoroScout."""
+    emoji_service = get_emoji_service(bot)
     version = lol_service.latest_version
+    display_patch = lol_service.display_patch
+    tier = build.get("tier", "Tier S")
+    is_aram = mode.lower() == "aram"
     color = config.COLOR_ARAM if is_aram else config.COLOR_LOL
 
-    # Título estilo PoroScout: [16.21] [Tier S] Champion data for Ahri
-    title = f"[{version}] [{tier}] Datos de campeón para {champ_name}"
+    # Título estilo PoroScout: [26.21] [Tier S] Champion data for Ahri
+    title = f"[{display_patch}] [{tier}] Datos de campeón para {champ_name}"
     if is_aram:
-        title = f"[{version}] [{tier}] {champ_name} — Modo ARAM"
+        title = f"[{display_patch}] [{tier}] {champ_name} — Modo ARAM"
 
-    # Descripción con lore breve y juegos analizados
+    # Descripción con lore breve y partidas analizadas
     lore = details.get("lore", "")
     if len(lore) > 170:
         lore = lore[:170] + "..."
 
     description = (
-        f"Basado en más de **{build.get('games_analyzed', '340.5k')}** partidas analizadas.\n"
-        f"**Estilo:** {build.get('style_name', 'Estándar')}\n\n"
+        f"Basado en más de **{build.get('games_analyzed', '342.3k')}** partidas analizadas.\n\n"
         f"> *{lore}*"
     )
 
@@ -50,54 +51,66 @@ def create_champion_embed(
     # -------------------------------------------------------------
     # 3 Columnas Superiores: Pick Rate, Ban Rate, Win Rate
     # -------------------------------------------------------------
-    embed.add_field(name="Pick Rate", value=f"**{build.get('pick_rate', '12.4%')}**", inline=True)
-    embed.add_field(name="Ban Rate", value=f"**{build.get('ban_rate', '7.8%')}**", inline=True)
-    embed.add_field(name="Win Rate", value=f"**{build.get('win_rate', '52.3%')}**", inline=True)
+    embed.add_field(name="Pick Rate", value=f"{build.get('pick_rate', '12.4%')} (Sin cambios)", inline=True)
+    embed.add_field(name="Ban Rate", value=f"{build.get('ban_rate', '7.8%')} (Sin cambios)", inline=True)
+    embed.add_field(name="Win Rate", value=f"**{build.get('win_rate', '52.3%')}** (Sin cambios)", inline=True)
 
     # -------------------------------------------------------------
-    # 3 Columnas Centrales: Objetos, Runas Primarias, Runas Secundarias
+    # 3 Columnas Centrales: Most Popular Build, Primary Runes, Secondary Runes
     # -------------------------------------------------------------
-    # Columna 1: Most Popular Build
-    items_content = (
-        f"**Starter Items**\n{build.get('starting_items', 'Doran + Poción')}\n\n"
-        f"**Core Items**\n{build.get('core_items', 'Objetos Core')}\n\n"
-        f"**Situational Items**\n{build.get('situational_items', 'Objetos Situacionales')}"
+
+    # Obtener emojis para objetos
+    starter_ids = build.get("starter_item_ids", ["1056", "2003", "3340"])
+    core_ids = build.get("core_item_ids", ["6653", "6655", "3157"])
+    situational_ids = build.get("situational_item_ids", ["3089", "3135", "3020"])
+
+    starter_emojis = [await emoji_service.get_item_emoji(i_id, version) for i_id in starter_ids]
+    core_emojis = [await emoji_service.get_item_emoji(i_id, version) for i_id in core_ids]
+    situational_emojis = [await emoji_service.get_item_emoji(i_id, version) for i_id in situational_ids]
+
+    # Columna 1: Most Popular Build (SOLO ICONOS, SIN TEXTO DE NOMBRES)
+    build_column_text = (
+        f"**Starter Items**\n{' '.join(starter_emojis)}\n\n"
+        f"**Core Items**\n{' '.join(core_emojis)}\n\n"
+        f"**Situational Items**\n{' '.join(situational_emojis)}"
     )
-    embed.add_field(name="Most Popular Build", value=items_content, inline=True)
+    embed.add_field(name="Most Popular Build", value=build_column_text, inline=True)
 
-    # Columna 2: Primary Runes
-    primary_tree = build.get("primary_tree", "Brujería")
-    primary_lines = [f"🌟 **{build.get('keystone', 'Cometa Arcano')}**"]
+    # Columna 2: Primary Runes (Icono de Runa + Nombre)
+    keystone = build.get("keystone", "Cometa Arcano")
+    keystone_em = await emoji_service.get_rune_emoji(keystone, version)
+    primary_lines = [f"{keystone_em} **{keystone}**"]
     for r in build.get("primary_runes", []):
-        primary_lines.append(f"• {r}")
+        r_em = await emoji_service.get_rune_emoji(r, version)
+        primary_lines.append(f"{r_em} {r}")
+
+    primary_tree_title = build.get("primary_tree", "Dominación").split("(")[0].strip()
     embed.add_field(name=f"Primary Runes", value="\n".join(primary_lines), inline=True)
 
-    # Columna 3: Secondary Runes y Fragmentos
-    secondary_tree = build.get("secondary_tree", "Inspiración")
+    # Columna 3: Secondary Runes (Icono de Runa + Nombre + Shards)
     secondary_lines = []
     for r in build.get("secondary_runes", []):
-        secondary_lines.append(f"• {r}")
+        r_em = await emoji_service.get_rune_emoji(r, version)
+        secondary_lines.append(f"{r_em} {r}")
 
-    shards_clean = "  ".join([f"`{s.replace('+', '').strip()}`" for s in build.get("shards", [])])
-    secondary_lines.append(f"\n**Fragmentos:**\n{shards_clean}")
+    # Fragmentos con gemas de colores estilo PoroScout (◆ ◆ ◆)
+    secondary_lines.append("\n🟣 🟣 🟢")
+    secondary_tree_title = build.get("secondary_tree", "Inspiración").split("(")[0].strip()
     embed.add_field(name=f"Secondary Runes", value="\n".join(secondary_lines), inline=True)
 
     # -------------------------------------------------------------
-    # Fila Completa: Skill Order (Matriz de Habilidades 1 al 18)
+    # Fila Completa: Skill Order (Matriz con Colores ANSI)
     # -------------------------------------------------------------
     skill_max = build.get("skill_max", "Q > W > E")
-    skill_matrix = lol_service.generate_skill_matrix(skill_max)
+    skill_matrix_ansi = lol_service.generate_skill_matrix(skill_max)
     embed.add_field(
         name=f"Skill Order ({skill_max})",
-        value=f"```text\n{skill_matrix}\n```",
+        value=skill_matrix_ansi,
         inline=False,
     )
 
-    # Imagen de banner con los iconos reales de objetos y habilidades
-    embed.set_image(url="attachment://build_card.png")
-
     footer_icon = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/29.jpg"
-    embed.set_footer(text=f"Powered by Riot DataDragon • Meep LoL Assistant", icon_url=footer_icon)
+    embed.set_footer(text=f"Parche {display_patch} • Powered by Riot DataDragon • Meep Assistant", icon_url=footer_icon)
 
     return embed
 
@@ -105,10 +118,11 @@ def create_champion_embed(
 class BuildVariantView(discord.ui.View):
     """
     Vista interactiva con botones de Discord para alternar entre diferentes estilos
-    de build (ej: AD vs AP vs Tanque) y actualizar tanto el texto como la imagen de objetos.
+    de build y enlaces externos.
     """
     def __init__(
         self,
+        bot: discord.Client,
         champ_id: str,
         champ_name: str,
         mode: str,
@@ -118,6 +132,7 @@ class BuildVariantView(discord.ui.View):
         author_id: int = None,
     ):
         super().__init__(timeout=180)
+        self.bot = bot
         self.champ_id = champ_id
         self.champ_name = champ_name
         self.mode = mode
@@ -148,7 +163,7 @@ class BuildVariantView(discord.ui.View):
                 button.callback = self._create_callback(idx)
                 self.add_item(button)
 
-        # Botón de enlace directo externo estilo PoroScout ("View on U.GG")
+        # Botón de enlace directo estilo PoroScout ("Ver en U.GG")
         ugg_url = f"https://u.gg/lol/champions/{self.champ_id.lower()}/build"
         if self.mode.lower() == "aram":
             ugg_url = f"https://u.gg/lol/champions/aram/{self.champ_id.lower()}-aram"
@@ -156,11 +171,13 @@ class BuildVariantView(discord.ui.View):
 
     def _create_callback(self, target_idx: int):
         async def callback(interaction: discord.Interaction):
+            await interaction.response.defer()
             self.current_index = target_idx
             self._build_buttons()
 
             new_build = self.builds[self.current_index]
-            new_embed = create_champion_embed(
+            new_embed = await create_champion_embed(
+                bot=self.bot,
                 champ_id=self.champ_id,
                 champ_name=self.champ_name,
                 mode=self.mode,
@@ -168,18 +185,6 @@ class BuildVariantView(discord.ui.View):
                 details=self.details,
             )
 
-            # Regenerar la tarjeta gráfica con los ítems del nuevo estilo
-            new_card_file = generate_build_card_file(
-                version=lol_service.latest_version,
-                starter_item_ids=new_build.get("starter_item_ids", ["1056", "2003"]),
-                core_item_ids=new_build.get("core_item_ids", ["226653", "226655", "223157"]),
-                situational_item_ids=new_build.get("situational_item_ids", ["223089", "3135", "3020"]),
-                spell_icons=self.details.get("spells", []),
-            )
-
-            if new_card_file:
-                await interaction.response.edit_message(embed=new_embed, attachments=[new_card_file], view=self)
-            else:
-                await interaction.response.edit_message(embed=new_embed, view=self)
+            await interaction.message.edit(embed=new_embed, view=self)
 
         return callback

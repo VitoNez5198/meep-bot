@@ -103,9 +103,9 @@ CHAMPION_SPECIAL_BUILDS: Dict[str, Dict[str, List[Dict[str, Any]]]] = {
                 "shards": ["+9 Fuerza Adaptable", "+9 Fuerza Adaptable", "+65 Vida"],
                 "skill_max": "Q > W > E",
                 "summoner_spells": "Flash + Curación o Marca",
-                "starter_item_ids": ["3134", "2003", "2003"],
-                "core_item_ids": ["226676", "226696", "226694"],
-                "situational_item_ids": ["223031", "3814", "3036"],
+                "starter_item_ids": ["3134", "2003"],
+                "core_item_ids": ["6676", "6696", "6694"],
+                "situational_item_ids": ["3031", "3814", "3036"],
                 "starting_items": "Espadón dentado + Pociones",
                 "core_items": "Recaudadora -> Arco Axiomático -> Rencor de Serylda",
                 "situational_items": "Filo Infinito, Filo de la Noche, Lord Dominik",
@@ -127,9 +127,9 @@ CHAMPION_SPECIAL_BUILDS: Dict[str, Dict[str, List[Dict[str, Any]]]] = {
                 "shards": ["+9 Fuerza Adaptable", "+9 Fuerza Adaptable", "+65 Vida"],
                 "skill_max": "E > W > Q",
                 "summoner_spells": "Flash + Claridad o Marca",
-                "starter_item_ids": ["3802", "2003", "2003"],
-                "core_item_ids": ["226653", "226655", "3116"],
-                "situational_item_ids": ["4645", "223157", "223089"],
+                "starter_item_ids": ["3802", "2003"],
+                "core_item_ids": ["6653", "6655", "3116"],
+                "situational_item_ids": ["4645", "3157", "3089"],
                 "starting_items": "Capítulo Perdido + Pociones",
                 "core_items": "Tormento de Liandry -> Malignidad -> Cetro de Rylai",
                 "situational_items": "Llama Sombría, Reloj de Zhonya, Sombrero de Rabadon",
@@ -154,7 +154,7 @@ CHAMPION_SPECIAL_BUILDS: Dict[str, Dict[str, List[Dict[str, Any]]]] = {
                 "skill_max": "Q > W > E",
                 "summoner_spells": "Flash + Barrera",
                 "starter_item_ids": ["1055", "2003", "3340"],
-                "core_item_ids": ["226676", "223031", "3094"],
+                "core_item_ids": ["6676", "3031", "3094"],
                 "situational_item_ids": ["3036", "3072", "3026"],
                 "starting_items": "Espada de Doran + Poción + Guardián",
                 "core_items": "Recaudadora -> Filo del Infinito -> Cañón de Fuego Rápido",
@@ -181,9 +181,9 @@ CHAMPION_SPECIAL_BUILDS: Dict[str, Dict[str, List[Dict[str, Any]]]] = {
                 "shards": ["+9 Fuerza Adaptable", "+9 Fuerza Adaptable", "+65 Vida"],
                 "skill_max": "Q > E > W",
                 "summoner_spells": "Flash + Marca (Nieve)",
-                "starter_item_ids": ["3145", "2003", "2003"],
-                "core_item_ids": ["6655", "226653", "223157"],
-                "situational_item_ids": ["4645", "223089", "3135"],
+                "starter_item_ids": ["3145", "2003"],
+                "core_item_ids": ["6655", "6653", "3157"],
+                "situational_item_ids": ["4645", "3089", "3135"],
                 "starting_items": "Alternador Hextech + Pociones",
                 "core_items": "Sobrecarga Tormentosa -> Malignidad -> Reloj de Zhonya",
                 "situational_items": "Llama Sombría, Sombrero Mortal de Rabadon, Bastón del Vacío",
@@ -205,7 +205,7 @@ CHAMPION_SPECIAL_BUILDS: Dict[str, Dict[str, List[Dict[str, Any]]]] = {
                 "shards": ["+8 Aceleración de Habilidad", "+6 Armadura", "+65 Vida"],
                 "skill_max": "E > W > Q",
                 "summoner_spells": "Flash + Marca (Nieve)",
-                "starter_item_ids": ["2051", "2003", "2003"],
+                "starter_item_ids": ["1054", "2003"],
                 "core_item_ids": ["3068", "3075", "3065"],
                 "situational_item_ids": ["4401", "3110", "3143"],
                 "starting_items": "Guardián de Cuerno + Pociones",
@@ -321,8 +321,20 @@ class LoLService:
         }
         return fallback
 
+    @property
+    def display_patch(self) -> str:
+        """Devuelve el número de parche oficial de League of Legends (ej: 26.21)."""
+        parts = self.latest_version.split(".")
+        if len(parts) >= 2:
+            season = parts[0]
+            # En la temporada 2026, los parches se nombran 26.xx
+            if season == "16" or int(season) < 26:
+                season = "26"
+            return f"{season}.{parts[1]}"
+        return "26.21"
+
     def generate_skill_matrix(self, skill_max_str: str) -> str:
-        """Genera la matriz ASCII de niveles 1 al 18 estilo PoroScout."""
+        """Genera la matriz coloreada en ANSI de niveles 1 al 18 estilo PoroScout."""
         parts = [p.strip().upper() for p in skill_max_str.split(">") if p.strip()]
         if len(parts) < 3:
             parts = ["Q", "W", "E"]
@@ -353,13 +365,36 @@ class LoLService:
                 levels[m3][p - 1] = str(p)
 
         out = []
+        # Códigos ANSI soportados por Discord:
+        # Colores diferenciados para cada habilidad:
+        # Q: Cian brillante \u001b[1;36m
+        # W: Verde brillante \u001b[1;32m
+        # E: Amarillo brillante \u001b[1;33m
+        # R: Magenta/Púrpura brillante \u001b[1;35m
+        # Separador (|) en blanco tenue: \u001b[0;37m|\u001b[0m
+        # Números de nivel en Blanco brillante: \u001b[1;37m para diferenciar letras de números
+        letter_colors = {
+            "Q": "\u001b[1;36m",
+            "W": "\u001b[1;32m",
+            "E": "\u001b[1;33m",
+            "R": "\u001b[1;35m",
+        }
+        reset = "\u001b[0m"
+        sep = "\u001b[0;37m|\u001b[0m"
+        num_color = "\u001b[1;37m"
+
         for k in ["Q", "W", "E", "R"]:
-            row = f"{k} "
+            col = letter_colors.get(k, "\u001b[1;33m")
+            row = f"{col}{k}{reset} {sep} "
             for l in range(18):
                 val = levels[k][l]
-                row += f"{val:>2} "
+                if val != " ":
+                    row += f"{num_color}{val:>2}{reset} "
+                else:
+                    row += "   "
             out.append(row.rstrip())
-        return "\n".join(out)
+
+        return "```ansi\n" + "\n".join(out) + "\n```"
 
     def get_builds(self, champ_id: str, mode: str = "normal") -> List[Dict[str, Any]]:
         """Devuelve las builds disponibles para el campeón en el modo especificado."""
@@ -398,10 +433,10 @@ class LoLService:
                 "shards": ["+10% Velocidad de Ataque", "+9 Fuerza Adaptable", "+65 Vida"],
                 "skill_max": "Q > W > E",
                 "summoner_spells": "Flash + Marca (Nieve)" if is_aram else "Flash + Curación",
-                "starter_item_ids": ["2052", "2003"] if is_aram else ["1055", "2003", "3340"],
-                "core_item_ids": ["6672", "223031", "3036"],
+                "starter_item_ids": ["1055", "2003"] if is_aram else ["1055", "2003", "3340"],
+                "core_item_ids": ["6672", "3031", "3036"],
                 "situational_item_ids": ["3072", "3094", "3026"],
-                "starting_items": "Guardián de Espada" if is_aram else "Espada de Doran + Poción + Guardián",
+                "starting_items": "Espada de Doran + Poción" if is_aram else "Espada de Doran + Poción + Guardián",
                 "core_items": "Kraken Slayer -> Filo Infinito -> Lord Dominik",
                 "situational_items": "Sanguinaria, Cañón de Fuego Rápido, Ángel de la Guarda",
                 "tips": "Mantén buen posicionamiento detrás de tu frontline y kitea a los enemigos más cercanos."
@@ -421,9 +456,9 @@ class LoLService:
                 "shards": ["+9 Fuerza Adaptable", "+9 Fuerza Adaptable", "+65 Vida"],
                 "skill_max": "Q > E > W",
                 "summoner_spells": "Flash + Claridad" if is_aram else "Flash + Teleport",
-                "starter_item_ids": ["3802", "2003"] if is_aram else ["1056", "2003", "2003", "3340"],
-                "core_item_ids": ["226653", "226655", "223157"],
-                "situational_item_ids": ["223089", "3135", "3020"],
+                "starter_item_ids": ["3802", "2003"] if is_aram else ["1056", "2003", "3340"],
+                "core_item_ids": ["6653", "6655", "3157"],
+                "situational_item_ids": ["3089", "3135", "3020"],
                 "starting_items": "Capítulo Perdido" if is_aram else "Anillo de Doran + Pociones + Guardián",
                 "core_items": "Tormento de Liandry -> Compañera de Luden -> Reloj de Zhonya",
                 "situational_items": "Sombrero Mortal de Rabadon, Bastón del Vacío, Botas de Hechicero",
@@ -444,7 +479,7 @@ class LoLService:
                 "shards": ["+8 Aceleración de Habilidad", "+6 Armadura", "+65 Vida"],
                 "skill_max": "Q > W > E",
                 "summoner_spells": "Flash + Marca (Nieve)",
-                "starter_item_ids": ["2051", "2003"] if is_aram else ["1054", "2003", "3340"],
+                "starter_item_ids": ["1054", "2003"] if is_aram else ["1054", "2003", "3340"],
                 "core_item_ids": ["3068", "3075", "3065"],
                 "situational_item_ids": ["4401", "3110", "3143"],
                 "starting_items": "Guardián de Cuerno + Pociones" if is_aram else "Escudo de Doran + Poción + Guardián",
@@ -467,8 +502,8 @@ class LoLService:
                 "shards": ["+9 Fuerza Adaptable", "+9 Fuerza Adaptable", "+65 Vida"],
                 "skill_max": "Q > E > W",
                 "summoner_spells": "Flash + Marca (Nieve)" if is_aram else "Flash + Ignición",
-                "starter_item_ids": ["1036", "2003"] if is_aram else ["1036", "2003", "3340"],
-                "core_item_ids": ["3142", "226694", "226696"],
+                "starter_item_ids": ["3134", "2003"] if is_aram else ["1036", "2003", "3340"],
+                "core_item_ids": ["3142", "6694", "6696"],
                 "situational_item_ids": ["3814", "3156", "3158"],
                 "starting_items": "Espadón dentado + Poción",
                 "core_items": "Espada Fantasma de Youmuu -> Rencor de Serylda -> Arco Axiomático",
@@ -490,9 +525,9 @@ class LoLService:
                 "shards": ["+8 Aceleración", "+9 Fuerza Adaptable", "+65 Vida"],
                 "skill_max": "E > W > Q",
                 "summoner_spells": "Flash + Curación / Extenuación",
-                "starter_item_ids": ["3865", "2003", "2003", "3340"],
+                "starter_item_ids": ["3865", "2003", "3340"],
                 "core_item_ids": ["6617", "3107", "3222"],
-                "situational_item_ids": ["3504", "6647", "3009"],
+                "situational_item_ids": ["3504", "4005", "3009"],
                 "starting_items": "Objeto de Soporte + Pociones + Guardián",
                 "core_items": "Renovador de Piedra Lunar -> Redención -> Crisol de Mikael",
                 "situational_items": "Incensario Ardiente, Mandato Imperial, Botas de Rapidez",
@@ -513,7 +548,7 @@ class LoLService:
                 "shards": ["+9 Fuerza Adaptable", "+9 Fuerza Adaptable", "+65 Vida"],
                 "skill_max": "Q > E > W",
                 "summoner_spells": "Flash + Marca (Nieve)" if is_aram else "Flash + Teleport",
-                "starter_item_ids": ["2049", "2003"] if is_aram else ["1055", "2003", "3340"],
+                "starter_item_ids": ["1055", "2003"] if is_aram else ["1055", "2003", "3340"],
                 "core_item_ids": ["3078", "3053", "6333"],
                 "situational_item_ids": ["3156", "3748", "3111"],
                 "starting_items": "Guardián de Martillo" if is_aram else "Espada de Doran + Poción",
