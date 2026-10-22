@@ -62,23 +62,39 @@ class LoLCog(commands.Cog, name="League of Legends"):
             for idx, b in enumerate(builds):
                 if pref in b.get("style_id", "").lower() or pref in b.get("style_name", "").lower():
                     current_idx = idx
-                    break
+        # Obtener detalles del campeón (lore y lista de habilidades)
+        details = lol_service.get_champion_details(champ_id)
 
         selected_build = builds[current_idx]
-        embed = create_champion_embed(champ_id, champ_name, mode, selected_build)
+        embed = create_champion_embed(champ_id, champ_name, mode, selected_build, details)
         view = BuildVariantView(
             champ_id=champ_id,
             champ_name=champ_name,
             mode=mode,
             builds=builds,
+            details=details,
             current_index=current_idx,
             author_id=author_id,
         )
 
+        card_file = generate_build_card_file(
+            version=lol_service.latest_version,
+            starter_item_ids=selected_build.get("starter_item_ids", ["1056", "2003"]),
+            core_item_ids=selected_build.get("core_item_ids", ["226653", "226655", "223157"]),
+            situational_item_ids=selected_build.get("situational_item_ids", ["223089", "3135", "3020"]),
+            spell_icons=details.get("spells", []),
+        )
+
         if isinstance(target_message, discord.Interaction):
-            await target_message.response.send_message(embed=embed, view=view)
+            if card_file:
+                await target_message.response.send_message(embed=embed, file=card_file, view=view)
+            else:
+                await target_message.response.send_message(embed=embed, view=view)
         else:
-            await target_message.reply(embed=embed, view=view, mention_author=False)
+            if card_file:
+                await target_message.reply(embed=embed, file=card_file, view=view, mention_author=False)
+            else:
+                await target_message.reply(embed=embed, view=view, mention_author=False)
 
     # =========================================================================
     # SLASH COMMANDS

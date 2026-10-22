@@ -41,8 +41,9 @@ def test_lol_system():
     for b in builds_mf:
         print(f"    * {b['style_name']} | WR: {b['win_rate']}")
 
-    embed = create_champion_embed("MissFortune", "Miss Fortune", "aram", builds_mf[0])
-    view = BuildVariantView("MissFortune", "Miss Fortune", "aram", builds_mf)
+    details_mf = lol_service.get_champion_details("MissFortune")
+    embed = create_champion_embed("MissFortune", "Miss Fortune", "aram", builds_mf[0], details_mf)
+    view = BuildVariantView("MissFortune", "Miss Fortune", "aram", builds_mf, details_mf)
     print(f"  ✓ Embed generado: '{embed.title}' con {len(embed.fields)} campos.")
     print(f"  ✓ Botones interactivos generados ({len(view.children)}):")
     for btn in view.children:
