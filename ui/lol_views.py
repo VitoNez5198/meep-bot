@@ -94,9 +94,6 @@ async def create_champion_embed(
     for r in build.get("secondary_runes", []):
         r_em = await emoji_service.get_rune_emoji(r, version)
         secondary_lines.append(f"{r_em} {r}")
-
-    # Fragmentos con gemas de colores estilo PoroScout (◆ ◆ ◆)
-    secondary_lines.append("\n🟣 🟣 🟢")
     secondary_tree_title = build.get("secondary_tree", "Inspiración").split("(")[0].strip()
     embed.add_field(name=f"Secondary Runes", value="\n".join(secondary_lines), inline=True)
 

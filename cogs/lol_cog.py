@@ -107,26 +107,30 @@ class LoLCog(commands.Cog, name="League of Legends"):
 
     @app_commands.command(
         name="champion",
-        description="Consulta runas, habilidades e ítems recomendados de un campeón (Normal o ARAM)."
+        description="Consulta runas, habilidades e ítems recomendados de un campeón (Clásico o ARAM)."
     )
     @app_commands.describe(
         campeon="Nombre o alias del campeón (ej: Miss Fortune, mf, Lee Sin, Kai'Sa)",
-        modo="Escribe 'aram' para modo ARAM o déjalo vacío para la Grieta del Invocador",
-        variante="Opcional: Estilo de build directo (ej: ap, ad, tanque)",
+        modo="Selecciona el modo de juego (Clásico o ARAM)",
+    )
+    @app_commands.choices(
+        modo=[
+            app_commands.Choice(name="Clásico (Grieta del Invocador)", value="normal"),
+            app_commands.Choice(name="ARAM", value="aram"),
+        ]
     )
     async def slash_champion(
         self,
         interaction: discord.Interaction,
         campeon: str,
-        modo: Optional[str] = None,
-        variante: Optional[str] = None,
+        modo: Optional[app_commands.Choice[str]] = None,
     ):
         await interaction.response.defer()
+        selected_mode = modo.value if isinstance(modo, app_commands.Choice) else (modo or "normal")
         await self._handle_champion_query(
             target_message=interaction,
             champ_query=campeon,
-            mode_or_role=modo,
-            style_preference=variante,
+            mode_or_role=selected_mode,
             author_id=interaction.user.id,
         )
 
@@ -169,19 +173,18 @@ class LoLCog(commands.Cog, name="League of Legends"):
     # =========================================================================
 
     @commands.command(name="champion", aliases=["c", "build", "champ"])
-    async def prefix_champion(self, ctx: commands.Context, campeon: str, modo: Optional[str] = None, variante: Optional[str] = None):
+    async def prefix_champion(self, ctx: commands.Context, campeon: str, modo: Optional[str] = None):
         """
-        Uso: !c <campeon> [aram/rol] [ap/ad/tanque]
+        Uso: !c <campeon> [aram/clasico]
         Ejemplos:
           !c mf
           !c mf aram
-          !c malphite aram ap
+          !c varus
         """
         await self._handle_champion_query(
             target_message=ctx,
             champ_query=campeon,
             mode_or_role=modo,
-            style_preference=variante,
             author_id=ctx.author.id,
         )
 
