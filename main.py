@@ -29,10 +29,11 @@ logger = logging.getLogger("meep")
 
 
 class MeepBot(commands.Bot):
-    def __init__(self):
-        intents = discord.Intents.default()
-        intents.message_content = True
-        intents.voice_states = True
+    def __init__(self, intents: discord.Intents = None):
+        if intents is None:
+            intents = discord.Intents.default()
+            intents.message_content = True
+            intents.voice_states = True
 
         super().__init__(
             command_prefix=config.BOT_PREFIX,
@@ -114,21 +115,7 @@ class MeepBot(commands.Bot):
         await ctx.reply(embed=embed, mention_author=False)
 
 
-async def main():
-    if not config.DISCORD_TOKEN or config.DISCORD_TOKEN == "tu_token_aqui":
-        logger.error(
-            "\n"
-            "==========================================================\n"
-            " ¡ATENCIÓN: DISCORD_TOKEN no está configurado!\n"
-            " Por favor crea un archivo .env a partir de .env.example\n"
-            " y añade el Token de tu bot de Discord Developer Portal.\n"
-            "=========================================================="
-        )
-        return
-
-    bot = MeepBot()
-
-    # Comando de ayuda global rápido
+def setup_help(bot: MeepBot):
     @bot.command(name="help", aliases=["ayuda", "comandos"])
     async def custom_help(ctx: commands.Context):
         embed = discord.Embed(
@@ -166,8 +153,46 @@ async def main():
         embed.set_footer(text="Desarrollado para jugar en dúo sin tirones de RAM.")
         await ctx.reply(embed=embed, mention_author=False)
 
-    async with bot:
-        await bot.start(config.DISCORD_TOKEN)
+
+async def main():
+    if not config.DISCORD_TOKEN or config.DISCORD_TOKEN == "tu_token_aqui":
+        logger.error(
+            "\n"
+            "==========================================================\n"
+            " ¡ATENCIÓN: DISCORD_TOKEN no está configurado!\n"
+            " Por favor crea un archivo .env a partir de .env.example\n"
+            " y añade el Token de tu bot de Discord Developer Portal.\n"
+            "=========================================================="
+        )
+        return
+
+    intents = discord.Intents.default()
+    intents.voice_states = True
+    intents.message_content = True
+
+    try:
+        bot = MeepBot(intents=intents)
+        setup_help(bot)
+        async with bot:
+            await bot.start(config.DISCORD_TOKEN)
+    except discord.errors.PrivilegedIntentsRequired:
+        logger.warning(
+            "\n"
+            "========================================================================\n"
+            " [AVISO DE INTENTS PRIVILEGIADOS]\n"
+            " 'Message Content Intent' no está activado en Discord Developer Portal.\n"
+            " Iniciando Meep con soporte completo para Slash Commands (/champion, /play, etc.).\n\n"
+            " Para habilitar también prefijos de texto (!c, !p):\n"
+            " 1. Ve a https://discord.com/developers/applications/\n"
+            " 2. Selecciona tu Bot -> Pestaña 'Bot'\n"
+            " 3. En 'Privileged Gateway Intents', activa 'Message Content Intent'.\n"
+            "========================================================================\n"
+        )
+        intents.message_content = False
+        bot = MeepBot(intents=intents)
+        setup_help(bot)
+        async with bot:
+            await bot.start(config.DISCORD_TOKEN)
 
 
 if __name__ == "__main__":
