@@ -11,3 +11,6 @@ __pycache__/
 # Binarios locales
 bin/
 *.exe
+
+# Cache de iconos
+cache/

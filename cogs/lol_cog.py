@@ -10,6 +10,7 @@ from discord.ext import commands
 
 import config
 from services.lol_service import lol_service
+from services.card_service import generate_build_card_file
 from ui.lol_views import BuildVariantView, create_champion_embed
 
 
