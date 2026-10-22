@@ -334,65 +334,83 @@ class LoLService:
         return "26.21"
 
     def generate_skill_matrix(self, skill_max_str: str) -> str:
-        """Genera la matriz coloreada en ANSI de niveles 1 al 18 estilo PoroScout."""
+        """
+        Genera la matriz coloreada en ANSI de habilidades niveles 1 al 18 estilo PoroScout.
+        Utiliza espaciado compacto sincronizado (<35 caracteres) para que NUNCA se desordene
+        ni salte de línea en pantallas móviles o ventanas estrechas de Discord.
+        """
         parts = [p.strip().upper() for p in skill_max_str.split(">") if p.strip()]
         if len(parts) < 3:
             parts = ["Q", "W", "E"]
         m1, m2, m3 = parts[0], parts[1], parts[2]
 
-        levels = {"Q": [" "] * 18, "W": [" "] * 18, "E": [" "] * 18, "R": [" "] * 18}
-
-        # R en niveles 6, 11, 16
-        for r in [6, 11, 16]:
-            levels["R"][r - 1] = str(r)
-
-        # Niveles iniciales 1, 2, 3
-        if m1 in levels:
-            levels[m1][0] = "1"
-        if m3 in levels:
-            levels[m3][1] = "2"
-        if m2 in levels:
-            levels[m2][2] = "3"
-
+        # Asignar qué habilidad sube en cada nivel del 1 al 18
+        level_skill = {}
+        level_skill[1] = m1
+        level_skill[2] = m3
+        level_skill[3] = m2
         for p in [4, 5, 7, 9]:
-            if m1 in levels:
-                levels[m1][p - 1] = str(p)
+            level_skill[p] = m1
         for p in [8, 10, 12, 13]:
-            if m2 in levels:
-                levels[m2][p - 1] = str(p)
+            level_skill[p] = m2
         for p in [14, 15, 17, 18]:
-            if m3 in levels:
-                levels[m3][p - 1] = str(p)
+            level_skill[p] = m3
+        for p in [6, 11, 16]:
+            level_skill[p] = "R"
 
-        out = []
-        # Códigos ANSI soportados por Discord:
-        # Colores diferenciados para cada habilidad:
-        # Q: Cian brillante \u001b[1;36m
-        # W: Verde brillante \u001b[1;32m
-        # E: Amarillo brillante \u001b[1;33m
-        # R: Magenta/Púrpura brillante \u001b[1;35m
-        # Separador (|) en blanco tenue: \u001b[0;37m|\u001b[0m
-        # Números de nivel en Blanco brillante: \u001b[1;37m para diferenciar letras de números
+        # Calcular posiciones X compactas para cada nivel
+        prefix_len = 4  # 'Q | '
+        pos = {}
+        curr_x = prefix_len
+        for lvl in range(1, 19):
+            if lvl > 1 and level_skill[lvl] == level_skill[lvl - 1]:
+                curr_x += 1  # Espacio de separación si la misma habilidad sube dos niveles seguidos
+            pos[lvl] = curr_x
+            curr_x += len(str(lvl))
+
+        total_len = curr_x + 1
+        grid = {k: [" "] * total_len for k in ["Q", "W", "E", "R"]}
+
+        # Ubicar cada número en su coordenada X correspondiente
+        for lvl in range(1, 19):
+            sk = level_skill[lvl]
+            s_val = str(lvl)
+            x = pos[lvl]
+            for idx, char in enumerate(s_val):
+                grid[sk][x + idx] = char
+
+        # Códigos de color ANSI para Discord
         letter_colors = {
-            "Q": "\u001b[1;36m",
-            "W": "\u001b[1;32m",
-            "E": "\u001b[1;33m",
-            "R": "\u001b[1;35m",
+            "Q": "\u001b[1;36m",  # Cian
+            "W": "\u001b[1;32m",  # Verde
+            "E": "\u001b[1;33m",  # Amarillo
+            "R": "\u001b[1;35m",  # Magenta / Púrpura (Ultimate)
         }
         reset = "\u001b[0m"
+        white = "\u001b[1;37m"  # Blanco brillante para los números de nivel
         sep = "\u001b[0;37m|\u001b[0m"
-        num_color = "\u001b[1;37m"
 
+        out = []
         for k in ["Q", "W", "E", "R"]:
             col = letter_colors.get(k, "\u001b[1;33m")
-            row = f"{col}{k}{reset} {sep} "
-            for l in range(18):
-                val = levels[k][l]
-                if val != " ":
-                    row += f"{num_color}{val:>2}{reset} "
+            prefix = f"{col}{k}{reset} {sep} "
+            row_str = prefix
+            line_chars = grid[k][prefix_len:]
+
+            i = 0
+            while i < len(line_chars):
+                ch = line_chars[i]
+                if ch != " ":
+                    num_buf = ch
+                    while i + 1 < len(line_chars) and line_chars[i + 1] != " ":
+                        i += 1
+                        num_buf += line_chars[i]
+                    row_str += f"{white}{num_buf}{reset}"
                 else:
-                    row += "   "
-            out.append(row.rstrip())
+                    row_str += " "
+                i += 1
+
+            out.append(row_str.rstrip())
 
         return "```ansi\n" + "\n".join(out) + "\n```"
 
