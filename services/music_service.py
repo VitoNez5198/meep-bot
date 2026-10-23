@@ -33,6 +33,7 @@ YTDL_BASE_OPTIONS = {
     "quiet": True,
     "no_warnings": True,
     "source_address": "0.0.0.0",
+    "remote_components": ["ejs:github"],
 }
 
 # Detección automática de cookies para evitar bloqueos en AWS / VPS ("Sign in to confirm you're not a bot")
