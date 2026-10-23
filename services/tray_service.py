@@ -151,7 +151,11 @@ class TrayManager:
                 pass
 
     def start(self):
-        """Inicia el icono de la bandeja del sistema en segundo plano."""
+        """Inicia el icono de la bandeja del sistema en segundo plano (solo en Windows)."""
+        if not sys.platform.startswith("win"):
+            logger.info("Sistema no-Windows detectado (Linux/Servidor). Bandeja del sistema omitida.")
+            return
+
         try:
             icon_file = _ensure_icon_exists()
             image = Image.open(icon_file)
