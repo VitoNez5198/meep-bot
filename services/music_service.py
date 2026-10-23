@@ -157,6 +157,7 @@ class GuildMusicPlayer:
         self.is_loading_next: bool = False
         self.controller_message: Optional[discord.Message] = None
         self.controller_view: Optional[Any] = None
+        self.disconnect_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
 
     @property
@@ -204,6 +205,7 @@ class GuildMusicPlayer:
 
     def stop(self):
         """Detiene completamente la reproducción, limpia la cola y desactiva el Modo Radio."""
+        self.cancel_disconnect_timer()
         self.queue.clear()
         self.radio_mode = False
         self.last_played = None
@@ -213,6 +215,49 @@ class GuildMusicPlayer:
         if self.voice_client:
             if self.voice_client.is_playing() or self.voice_client.is_paused():
                 self.voice_client.stop()
+
+    def start_disconnect_timer(self, delay: int = 120):
+        """Inicia temporizador para desconectar al bot si queda solo en el canal."""
+        if self.disconnect_task and not self.disconnect_task.done():
+            return
+        self.disconnect_task = asyncio.create_task(self._auto_disconnect_worker(delay))
+        logger.info(f"Temporizador de desconexión por inactividad iniciado ({delay}s) en guild {self.guild_id}.")
+
+    def cancel_disconnect_timer(self):
+        """Cancela la desconexión automática si un usuario entra al canal."""
+        if self.disconnect_task and not self.disconnect_task.done():
+            self.disconnect_task.cancel()
+            self.disconnect_task = None
+            logger.info(f"Temporizador de desconexión cancelado en guild {self.guild_id}.")
+
+    async def _auto_disconnect_worker(self, delay: int):
+        try:
+            await asyncio.sleep(delay)
+            if self.voice_client and self.voice_client.is_connected():
+                channel = self.voice_client.channel
+                if channel:
+                    humans = [m for m in channel.members if not m.bot]
+                    if len(humans) == 0:
+                        logger.info(f"Desconectando bot por canal vacío en guild {self.guild_id}.")
+                        channel_to_notify = self.controller_message.channel if self.controller_message else None
+                        self.stop()
+                        await self.voice_client.disconnect()
+                        self.voice_client = None
+                        await self.music_service.update_presence_for_track(None)
+                        if channel_to_notify:
+                            try:
+                                embed = discord.Embed(
+                                    title="💤 Desconexión por Inactividad",
+                                    description="Meep se desconectó del canal de voz porque se quedó solo.",
+                                    color=config.COLOR_MEEP,
+                                )
+                                await channel_to_notify.send(embed=embed)
+                            except Exception:
+                                pass
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"Error en _auto_disconnect_worker (guild {self.guild_id}): {e}")
 
     def jump_to_track(self, position: int) -> Tuple[bool, Optional[Track], int]:
         """

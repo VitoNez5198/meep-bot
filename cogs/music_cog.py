@@ -75,6 +75,7 @@ class MusicCog(commands.Cog, name="Música"):
 
         player = self.music_service.get_player(guild.id)
         player.voice_client = voice_client
+        player.cancel_disconnect_timer()
         return voice_client
 
     # =========================================================================
@@ -833,12 +834,30 @@ class MusicCog(commands.Cog, name="Música"):
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        """Restaura presencia y limpia estado si el bot es desconectado del canal de voz."""
-        if self.bot.user and member.id == self.bot.user.id and before.channel is not None and after.channel is None:
-            player = self.music_service.get_player(member.guild.id)
-            player.stop()
-            player.voice_client = None
-            await self.music_service.update_presence_for_track(None)
+        """Maneja desconexiones del bot y desconexión automática cuando queda solo."""
+        guild = member.guild
+        player = self.music_service.get_player(guild.id)
+
+        # 1. Si el bot fue desconectado manualmente del canal
+        if self.bot.user and member.id == self.bot.user.id:
+            if before.channel is not None and after.channel is None:
+                player.cancel_disconnect_timer()
+                player.stop()
+                player.voice_client = None
+                await self.music_service.update_presence_for_track(None)
+            return
+
+        # 2. Monitorear si el canal donde está el bot se quedó sin personas
+        voice_client = guild.voice_client
+        if voice_client and voice_client.channel:
+            bot_channel = voice_client.channel
+            # Si el evento ocurrió en el canal donde está el bot
+            if before.channel == bot_channel or after.channel == bot_channel:
+                humans = [m for m in bot_channel.members if not m.bot]
+                if len(humans) == 0:
+                    player.start_disconnect_timer(delay=120)
+                else:
+                    player.cancel_disconnect_timer()
 
 
 async def setup(bot: commands.Bot):
