@@ -34,3 +34,12 @@
 - [x] 4.2 Verificar registro y sincronización de comandos Slash y prefijos de texto.
 - [x] 4.3 Validar respuestas visuales de embeds y comportamiento de botones interactivos de LoL.
 - [x] 4.4 Validar reproducción de audio y manejo de cola musical.
+
+## Fase 5: Integración en Barra de Tareas (System Tray) y Autoarranque con Windows
+- [x] 5.1 Implementar `services/tray_service.py` con `pystray`:
+  - [x] 5.1.1 Icono en el área de notificación (junto al reloj) sin ventana de consola.
+  - [x] 5.1.2 Menú contextual con estado (`🟢 En línea`), visor de logs, apertura de carpeta y reinicio/cierre limpio.
+  - [x] 5.1.3 Opción de activar/desactivar `🚀 Iniciar con Windows` automáticamente mediante acceso directo en Startup.
+- [x] 5.2 Implementar lanzador silencioso `iniciar_meep_segundo_plano.vbs` con `pythonw.exe`.
+- [x] 5.3 Configurar logging a archivo rotativo `data/meep.log` para monitoreo en segundo plano.
+- [x] 5.4 Documentar el modo segundo plano y autoarranque en `README.md` e `iniciar_meep.bat`.

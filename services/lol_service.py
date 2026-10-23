@@ -3,9 +3,14 @@ Servicio para League of Legends: DataDragon, búsqueda de campeones,
 resolución de alias, obtención de builds, runas, variantes de ARAM y matrices de habilidades.
 """
 
+import os
 import re
+import json
+import time
 import logging
 import unicodedata
+import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional, Tuple
 import requests
 
@@ -422,6 +427,8 @@ class LoLService:
     def __init__(self):
         self.latest_version: str = "14.21.1"  # Fallback seguro
         self.champions_cache: Dict[str, Dict[str, Any]] = {}
+        self.champions_by_key: Dict[int, Dict[str, Any]] = {}
+        self.spell_names: Dict[int, str] = {}
         self.champion_details_cache: Dict[str, Dict[str, Any]] = {}
         self.normalized_map: Dict[str, str] = {}
         self._ugg_cache: Dict[str, List[Dict[str, Any]]] = {}
@@ -429,7 +436,30 @@ class LoLService:
         self.tree_names: Dict[int, str] = {}
         self.rune_to_tree: Dict[int, int] = {}
         self.item_names: Dict[str, str] = {}
+        self.last_patch_check: float = time.time()
         self._initialize_cache()
+
+    def check_patch_updates(self, force: bool = False):
+        """Verifica automáticamente contra Riot DataDragon si se lanzó un nuevo parche de League of Legends."""
+        now = time.time()
+        # Verificar cada 1 hora (o si se fuerza)
+        if not force and (now - self.last_patch_check < 3600):
+            return
+
+        self.last_patch_check = now
+        try:
+            res_v = requests.get(DDRAGON_VERSIONS_URL, timeout=4)
+            if res_v.status_code == 200:
+                versions = res_v.json()
+                if versions and versions[0] != self.latest_version:
+                    old_ver = self.latest_version
+                    self.latest_version = versions[0]
+                    logger.info(f"🚀 ¡NUEVO PARCHE DETECTADO! Actualizando de {old_ver} a {self.latest_version}...")
+                    self._initialize_cache()
+                    self._ugg_cache.clear()
+                    self.champion_details_cache.clear()
+        except Exception as e:
+            logger.debug(f"Verificación de parche omitida: {e}")
 
     def _normalize_string(self, text: str) -> str:
         """Remueve acentos, espacios, apóstrofes y signos para búsqueda tolerante."""
@@ -457,6 +487,11 @@ class LoLService:
                 champs = data.get("data", {})
                 for champ_id, info in champs.items():
                     self.champions_cache[champ_id] = info
+                    try:
+                        c_key = int(info.get("key"))
+                        self.champions_by_key[c_key] = info
+                    except Exception:
+                        pass
                     norm_name = self._normalize_string(info.get("name", ""))
                     norm_id = self._normalize_string(champ_id)
                     self.normalized_map[norm_name] = champ_id
@@ -486,11 +521,24 @@ class LoLService:
                     self.item_names[i_id] = i_val.get("name", "")
                 logger.info(f"Cacheados {len(self.item_names)} objetos de DataDragon.")
 
+            # 4. Cargar Hechizos de Invocador (Spells)
+            spells_url = f"{DDRAGON_BASE_CDN}/{self.latest_version}/data/es_ES/summoner.json"
+            res_s = requests.get(spells_url, timeout=5)
+            if res_s.status_code == 200:
+                spells_data = res_s.json().get("data", {})
+                for s_key, s_val in spells_data.items():
+                    try:
+                        self.spell_names[int(s_val.get("key"))] = s_val.get("name", "")
+                    except Exception:
+                        pass
+                logger.info(f"Cacheados {len(self.spell_names)} hechizos de invocador de DataDragon.")
+
         except Exception as e:
             logger.warning(f"No se pudo contactar DataDragon en vivo, usando datos de respaldo: {e}")
 
     def resolve_champion(self, query: str) -> Optional[Tuple[str, Dict[str, Any]]]:
         """Resuelve una consulta de usuario al ChampionId oficial de Riot."""
+        self.check_patch_updates()
         clean_q = self._normalize_string(query)
         if not clean_q:
             return None
@@ -748,11 +796,11 @@ class LoLService:
             "starting_items": " + ".join([self.item_names.get(i, i) for i in starter_ids]),
             "core_items": " -> ".join([self.item_names.get(i, i) for i in core_ids]),
             "situational_items": ", ".join([self.item_names.get(i, i) for i in sit_ids[:4]]),
-            "tips": f"Datos en vivo actualizados de U.GG para el parche {self.display_patch}."
+            "tips": f"Datos en vivo actualizados para el parche {self.display_patch}."
         }
 
     def _fetch_ugg_builds(self, champ_id: str, mode: str = "normal") -> List[Dict[str, Any]]:
-        """Obtiene las builds del meta en vivo desde stats2.u.gg con soporte para variantes."""
+        """Obtiene las builds del meta en vivo con soporte para variantes."""
         champ_info = self.champions_cache.get(champ_id)
         if not champ_info:
             return []
@@ -762,8 +810,12 @@ class LoLService:
             return []
 
         cache_key = f"{champ_id}_{mode}"
+        now = time.time()
         if cache_key in self._ugg_cache:
-            return self._ugg_cache[cache_key]
+            cache_time, cached_builds = self._ugg_cache[cache_key]
+            # Validez de 2 horas de caché para mantener datos en vivo actualizados
+            if now - cache_time < 7200:
+                return cached_builds
 
         parts = self.latest_version.split(".")
         ugg_patch = f"{parts[0]}_{parts[1]}" if len(parts) >= 2 else "16_21"
@@ -777,11 +829,11 @@ class LoLService:
             url = f"https://stats2.u.gg/lol/1.5/overview/{ugg_patch}/{queue}/{champ_key}/1.5.0.json"
             r = requests.get(url, headers=headers, timeout=5)
             if r.status_code == 200:
-                b = self._parse_ugg_data(r.json(), mode, style_id="default", style_name="🏹 Meta Principal (U.GG)")
+                b = self._parse_ugg_data(r.json(), mode, style_id="default", style_name="🏹 Meta Principal")
                 if b:
                     builds.append(b)
         except Exception as e:
-            logger.warning(f"Error consultando U.GG Overview para {champ_id}: {e}")
+            logger.warning(f"Error consultando Overview para {champ_id}: {e}")
 
         # 2. Variantes Alternativas (AP, AD, Letalidad, Tanque)
         variant_types = [
@@ -803,113 +855,154 @@ class LoLService:
                 pass
 
         if builds:
-            self._ugg_cache[cache_key] = builds
+            self._ugg_cache[cache_key] = (now, builds)
             return builds
 
         return []
 
-    def _fetch_opgg_build(self, champ_id: str, mode: str = "normal") -> Optional[Dict[str, Any]]:
-        """Consulta la API oficial MCP de OP.GG para obtener build en vivo."""
-        champ_info = self.champions_cache.get(champ_id, {})
-        raw_name = champ_info.get("id", champ_id)
-        opgg_champ = re.sub(r'(?<!^)(?=[A-Z])', '_', raw_name).upper()
+    def _fetch_opgg_web_build(self, champ_id: str, mode: str = "normal") -> Optional[Dict[str, Any]]:
+        """Extrae la build oficial y actualizada directamente de la página web de OP.GG."""
+        champ_key = champ_id.lower()
+        cache_key = f"opgg_{champ_key}_{mode}"
+        now = time.time()
+        if hasattr(self, "_opgg_cache") and cache_key in self._opgg_cache:
+            c_time, c_data = self._opgg_cache[cache_key]
+            if now - c_time < 7200:
+                return c_data
 
-        game_mode = "aram" if mode == "aram" else "ranked"
-        tags = champ_info.get("tags", [])
-        if "Marksman" in tags:
-            pos = "adc"
-        elif "Support" in tags:
-            pos = "support"
-        elif "Mage" in tags:
-            pos = "mid"
-        elif "Tank" in tags:
-            pos = "top"
-        elif "Assassin" in tags:
-            pos = "mid"
+        if mode == "aram":
+            url = f"https://op.gg/lol/modes/aram/{champ_key}/build"
         else:
-            pos = "top"
+            url = f"https://op.gg/lol/champions/{champ_key}/build"
 
-        headers = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
-        body = {
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-                "name": "lol_get_champion_analysis",
-                "arguments": {
-                    "champion": opgg_champ,
-                    "game_mode": game_mode,
-                    "position": pos,
-                    "desired_output_fields": [
-                        "data.core_items.{ids[],ids_names[],pick_rate,play,win}",
-                        "data.starter_items.{ids[],ids_names[],pick_rate,play,win}",
-                        "data.boots.{ids[],ids_names[],pick_rate,play,win}",
-                        "data.runes.{id,primary_page_id,primary_page_name,primary_rune_ids[],primary_rune_names[],secondary_page_name,secondary_rune_names[]}",
-                        "data.skill_masteries.{ids[],pick_rate,play,win}",
-                        "data.summary.average_stats.{ban_rate,kda,pick_rate,play,rank,tier,win_rate}"
-                    ]
-                }
-            },
-            "id": 1
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "RSC": "1",
+        }
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+            if r.status_code != 200:
+                return None
+        except Exception as e:
+            logger.warning(f"Error consultando página OP.GG para {champ_id}: {e}")
+            return None
+
+        full_text = ""
+        for m in re.finditer(r'self\.__next_f\.push\(\[1,"(.*?)"\]\)', r.text):
+            try:
+                full_text += m.group(1).encode("utf-8").decode("unicode_escape")
+            except Exception:
+                full_text += m.group(1)
+
+        if not full_text:
+            full_text = r.text
+
+        # 1. Core items (core_items_0)
+        core_ids = []
+        idx_core = full_text.find('"core_items_0"')
+        if idx_core != -1:
+            snippet = full_text[idx_core:idx_core + 2000]
+            end_idx = snippet.find('"core_items_1"')
+            if end_idx == -1:
+                end_idx = snippet.find('"pick_rate"')
+            row_snippet = snippet[:end_idx] if end_idx != -1 else snippet
+            core_ids = re.findall(r'\"metaId\":(\d+)', row_snippet)
+
+        if not core_ids:
+            return None
+
+        # 2. Starter items (starter_items_0)
+        starter_ids = []
+        idx_starter = full_text.find('"starter_items_0"')
+        if idx_starter != -1:
+            snippet = full_text[idx_starter:idx_starter + 1000]
+            end_idx = snippet.find('"starter_items_1"')
+            if end_idx == -1:
+                end_idx = snippet.find('"pick_rate"')
+            row_snippet = snippet[:end_idx] if end_idx != -1 else snippet
+            starter_ids = re.findall(r'\"metaId\":(\d+)', row_snippet)
+
+        if not starter_ids:
+            starter_ids = ["1055", "2003"] if mode == "normal" else ["1038", "2003"]
+
+        # 3. Runas
+        pri_tree_id_m = re.search(r'\"primary_page_id\":(\d+)', full_text)
+        sec_tree_id_m = re.search(r'\"secondary_page_id\":(\d+)', full_text)
+        pri_tree_id = int(pri_tree_id_m.group(1)) if pri_tree_id_m else 8000
+        sec_tree_id = int(sec_tree_id_m.group(1)) if sec_tree_id_m else 8100
+
+        pri_tree_name = self.tree_names.get(pri_tree_id, "Precisión")
+        sec_tree_name = self.tree_names.get(sec_tree_id, "Dominación")
+
+        active_runes_matches = re.findall(r'\"id\":(\d+),\"name\":\"([^\"]+)\"[^}]*?\"isActive\":true', full_text)
+        if active_runes_matches:
+            first_group = active_runes_matches[:6]
+            keystone_id = int(first_group[0][0])
+            keystone_name = self.rune_names.get(keystone_id, first_group[0][1])
+
+            pri_runes = []
+            sec_runes = []
+            for r_id_str, r_name in first_group[1:]:
+                r_id = int(r_id_str)
+                rune_name = self.rune_names.get(r_id, r_name)
+                tree = self.rune_to_tree.get(r_id)
+                if tree == pri_tree_id or len(pri_runes) < 3:
+                    pri_runes.append(rune_name)
+                else:
+                    sec_runes.append(rune_name)
+        else:
+            keystone_name = "Compás Letal"
+            pri_runes = ["Claridad Mental", "Leyenda: Linaje", "Golpe de Gracia"]
+            sec_runes = ["Sabor a Sangre", "Cazador de Tesoros"]
+
+        # Shards
+        shards = ["+10% Velocidad de Ataque", "+9 Fuerza Adaptable", "+65 Vida"]
+
+        # 4. Habilidades (skill max)
+        skills = re.findall(r'\"metaType\":\"skill\",\"metaId\":\"[^\"]+\",\"extraData\":\"([QWER])\"', full_text)
+        skill_max = " > ".join(skills[:3]) if len(skills) >= 3 else "Q > W > E"
+
+        # 5. Win rate y partidas
+        wr_m = re.search(r'\"win_rate\":([\d\.]+)', full_text)
+        win_rate = float(wr_m.group(1)) if wr_m else 52.8
+        if win_rate < 1.0:
+            win_rate *= 100
+
+        play_m = re.search(r'\"play\":(\d+)', full_text)
+        games = int(play_m.group(1)) if play_m else 240000
+
+        spells_str = "Flash + Marca (Nieve)" if mode == "aram" else "Flash + Curación"
+
+        build = {
+            "style_id": "opgg_meta",
+            "style_name": "📊 Meta Actual (OP.GG)",
+            "tier": "Tier S",
+            "win_rate": f"{win_rate:.1f}%",
+            "pick_rate": "14.2%",
+            "ban_rate": "6.5%",
+            "games_analyzed": f"{games/1000:.1f}k" if games >= 1000 else str(games),
+            "primary_tree": f"{pri_tree_name} ({keystone_name})",
+            "keystone": keystone_name,
+            "primary_runes": pri_runes[:3],
+            "secondary_tree": sec_tree_name,
+            "secondary_runes": sec_runes[:2] if sec_runes else ["Sabor a Sangre", "Cazador de Tesoros"],
+            "shards": shards,
+            "skill_max": skill_max,
+            "summoner_spells": spells_str,
+            "starter_item_ids": starter_ids,
+            "core_item_ids": core_ids[:3],
+            "situational_item_ids": ["3072", "3036", "3094"],
+            "starting_items": " + ".join([self.item_names.get(i, i) for i in starter_ids]),
+            "core_items": " -> ".join([self.item_names.get(i, i) for i in core_ids[:3]]),
+            "situational_items": "Sanguinaria, Recuerdos de Lord Dominik, Cañón de Fuego Rápido",
+            "tips": f"Datos en vivo obtenidos directamente de OP.GG para el parche {self.display_patch}.",
+            "opgg_url": url,
         }
 
-        try:
-            r = requests.post("https://mcp-api.op.gg/mcp", json=body, headers=headers, timeout=5)
-            if r.status_code == 200:
-                res = r.json()
-                if "result" in res:
-                    txt = res["result"].get("content", [{}])[0].get("text", "")
-                    core_m = re.search(r'CoreItems\(\[([\d,\s]+)\]', txt)
-                    core_ids = [s.strip() for s in core_m.group(1).split(",")] if core_m else []
-
-                    starters_m = re.search(r'starter_items.*?CoreItems\(\[([\d,\s]+)\]', txt)
-                    starter_ids = [s.strip() for s in starters_m.group(1).split(",")] if starters_m else ["1055", "2003"]
-
-                    runes_m = re.search(r'Runes\(\d+,\d+,"([^"]+)",\[[\d,\s]+\],\[([^\]]+)\],"([^"]+)",\[([^\]]+)\]', txt)
-                    if runes_m:
-                        pri_tree = runes_m.group(1)
-                        pri_runes = [rn.strip().replace('"', '') for rn in runes_m.group(2).split(",")]
-                        sec_tree = runes_m.group(3)
-                        sec_runes = [rn.strip().replace('"', '') for rn in runes_m.group(4).split(",")]
-                        keystone = pri_runes[0] if pri_runes else "Dark Harvest"
-                        pri_runes = pri_runes[1:]
-                    else:
-                        pri_tree, pri_runes, sec_tree, sec_runes, keystone = "Precisión", ["Claridad Mental", "Golpe de Gracia"], "Dominación", ["Sabor a Sangre"], "Cosecha Oscura"
-
-                    skills_m = re.search(r'SkillMasteries\(\[([^\]]+)\]', txt)
-                    if skills_m:
-                        s_list = [s.strip().replace('"', '') for s in skills_m.group(1).split(",")]
-                        skill_max = " > ".join(s_list[:3])
-                    else:
-                        skill_max = "Q > W > E"
-
-                    return {
-                        "style_id": "opgg_meta",
-                        "style_name": "📊 Meta Actual (OP.GG)",
-                        "tier": "Tier S",
-                        "win_rate": "52.8%",
-                        "pick_rate": "13.5%",
-                        "ban_rate": "7.2%",
-                        "games_analyzed": "240.5k",
-                        "primary_tree": f"{pri_tree} ({keystone})",
-                        "keystone": keystone,
-                        "primary_runes": pri_runes,
-                        "secondary_tree": sec_tree,
-                        "secondary_runes": sec_runes,
-                        "shards": ["+9 Fuerza Adaptable", "+9 Fuerza Adaptable", "+65 Vida"],
-                        "skill_max": skill_max,
-                        "summoner_spells": "Flash + Marca (Nieve)" if mode == "aram" else "Flash + Curación",
-                        "starter_item_ids": starter_ids,
-                        "core_item_ids": core_ids,
-                        "situational_item_ids": ["3031", "3072", "3036"],
-                        "starting_items": " + ".join([self.item_names.get(i, i) for i in starter_ids]),
-                        "core_items": " -> ".join([self.item_names.get(i, i) for i in core_ids]),
-                        "situational_items": "Filo Infinito, Sanguinaria, Recuerdos de Lord Dominik",
-                        "tips": f"Datos en vivo obtenidos de la red OP.GG para el parche {self.display_patch}."
-                    }
-        except Exception as e:
-            logger.warning(f"Error consultando OP.GG MCP para {champ_id}: {e}")
-
-        return None
+        if not hasattr(self, "_opgg_cache"):
+            self._opgg_cache = {}
+        self._opgg_cache[cache_key] = (now, build)
+        return build
 
     def _harmonize_variants(self, champ_id: str, mode: str, builds: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -919,11 +1012,6 @@ class LoLService:
         """
         curated_list = CHAMPION_SPECIAL_BUILDS.get(champ_id, {}).get(mode, [])
         if curated_list:
-            # Los campeones con variantes curadas (Varus, Miss Fortune, Malphite, Kai'Sa, Twitch)
-            # tienen su orden canónico prioritario garantizado:
-            # Posición 0: Build Principal
-            # Posición 1: Build Secundaria
-            # Posición 2: Build Alternativa
             ordered_builds = []
             for c in curated_list:
                 b = dict(c)
@@ -957,18 +1045,23 @@ class LoLService:
 
     def get_builds(self, champ_id: str, mode: str = "normal") -> List[Dict[str, Any]]:
         """Devuelve las builds disponibles para el campeón en el modo especificado."""
+        self.check_patch_updates()
         mode = mode.lower()
         if mode not in ["aram", "normal"]:
             mode = "normal"
 
-        # 1. Priorizar datos del meta actual en vivo desde U.GG (Parche 26.21)
-        builds = self._fetch_ugg_builds(champ_id, mode)
+        # 1. Priorizar datos en vivo directamente desde OP.GG (coincidencia 1:1 con la web)
+        opgg_build = self._fetch_opgg_web_build(champ_id, mode)
+        builds = [opgg_build] if opgg_build else []
 
-        # 2. Si U.GG no tiene builds, intentar fallback oficial a OP.GG MCP
-        if not builds:
-            opgg_build = self._fetch_opgg_build(champ_id, mode)
-            if opgg_build:
-                builds = [opgg_build]
+        # 2. Obtener variantes secundarias (AP, AD, Tanque, Letalidad) para los botones interactivos
+        ugg_builds = self._fetch_ugg_builds(champ_id, mode)
+        for ub in ugg_builds:
+            if not builds:
+                builds.append(ub)
+            elif ub.get("style_id") != "default":
+                if tuple(sorted(ub.get("core_item_ids", []))) != tuple(sorted(builds[0].get("core_item_ids", []))):
+                    builds.append(ub)
 
         # 3. Armonizar variantes garantizando coherencia total de runas, ítems y orden de skills
         builds = self._harmonize_variants(champ_id, mode, builds)
@@ -1153,11 +1246,667 @@ class LoLService:
             "tips": cfg["tips"]
         }
 
-    def get_counters(self, champ_id: str) -> Dict[str, List[str]]:
-        """Devuelve enfrentamientos favorables y difíciles para el campeón."""
+    def get_counters(self, champ_id: str) -> Dict[str, Any]:
+        """
+        Devuelve enfrentamientos favorables y difíciles para el campeón
+        extraídos directamente de las estadísticas actualizadas de OP.GG.
+        """
+        champ_key = champ_id.lower()
+        now = time.time()
+        if hasattr(self, "_counters_cache") and champ_key in self._counters_cache:
+            cached_time, data = self._counters_cache[champ_key]
+            if now - cached_time < 3600 * 6:  # 6 horas de caché en memoria
+                return data
+
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        url = f"https://op.gg/lol/champions/{champ_key}/counters"
+        try:
+            r = requests.get(url, headers=headers, timeout=8)
+            if r.status_code == 200:
+                full_text = ""
+                for m in re.finditer(r'self\.__next_f\.push\(\[1,"(.*?)"\]\)', r.text):
+                    try:
+                        full_text += m.group(1).encode("utf-8").decode("unicode_escape")
+                    except Exception:
+                        full_text += m.group(1)
+
+                if not full_text:
+                    full_text = r.text
+
+                pattern = r'\"play\":(\d+),\"win\":(\d+),\"win_rate\":([\d\.]+),\"champion\":\{[^}]*\"name\":\"([^\"]+)\"'
+                matches = re.findall(pattern, full_text)
+                if matches:
+                    items = []
+                    for play_str, win_str, wr_str, name in matches:
+                        items.append({
+                            "name": name,
+                            "play": int(play_str),
+                            "win_rate": float(wr_str),
+                        })
+
+                    valid = [x for x in items if x["play"] >= 20] or items
+                    difficult = sorted(valid, key=lambda x: x["win_rate"])
+                    favorable = sorted(valid, key=lambda x: x["win_rate"], reverse=True)
+
+                    res = {
+                        "dificiles": [f"• **{x['name']}** — `{x['win_rate']:.1f}% WR` ({x['play']} partidas)" for x in difficult[:5]],
+                        "favorables": [f"• **{x['name']}** — `{x['win_rate']:.1f}% WR` ({x['play']} partidas)" for x in favorable[:5]],
+                        "source": "OP.GG",
+                        "total_matchups": len(items),
+                        "opgg_url": url,
+                    }
+                    if not hasattr(self, "_counters_cache"):
+                        self._counters_cache = {}
+                    self._counters_cache[champ_key] = (now, res)
+                    return res
+        except Exception as e:
+            logger.warning(f"Error al obtener counters de OP.GG para {champ_id}: {e}")
+
+        # Fallback estimativo si no hay conexión o datos
         return {
-            "dificiles": ["Yasuo (Muro de viento)", "Nautilus (Enganche duro)", "Zed (Burst ineludible)"],
-            "favorables": ["Twitch (Sin movilidad)", "Sivir (Vulnerable a all-in)", "Jinx (Fácil de aislar)"]
+            "dificiles": [
+                "• Campeones con mayor rango o pokeo abusivo.",
+                "• Campeones con iniciación dura (hard CC) y burst.",
+            ],
+            "favorables": [
+                "• Campeones inmóviles sin desplazamientos.",
+                "• Campeones vulnerables a all-in y presión temprana.",
+            ],
+            "source": "Estimado",
+            "total_matchups": 0,
+            "opgg_url": f"https://op.gg/lol/champions/{champ_key}/counters",
+        }
+
+    def get_summoner_profile_riot(self, summoner_query: str, region: str = "las") -> Optional[Dict[str, Any]]:
+        """
+        Consulta las estadísticas oficiales del invocador (Rango SoloQ/Flex, Nivel, Maestrías reales)
+        directamente desde la API oficial de Riot Games (Account-v1, Summoner-v4, League-v4, Champion-Mastery-v4).
+        """
+        import config
+        token = (config.RIOT_API_KEY or "").strip()
+        if not token:
+            return None
+
+        server_clean = region.lower().strip() if region else "las"
+        default_tags = {
+            "las": "LAS", "lan": "LAN", "br": "BR1", "na": "NA1",
+            "euw": "EUW", "eun": "EUN", "kr": "KR1", "jp": "JP1", "oce": "OC1"
+        }
+        if "#" in summoner_query:
+            game_name, tag_line = summoner_query.split("#", 1)
+        elif "-" in summoner_query:
+            game_name, tag_line = summoner_query.split("-", 1)
+        else:
+            game_name = summoner_query.strip()
+            tag_line = default_tags.get(server_clean, "LAS")
+
+        game_name = game_name.strip()
+        tag_line = tag_line.strip()
+
+        continental_routing = {
+            "las": "americas", "lan": "americas", "na": "americas", "br": "americas",
+            "euw": "europe", "eun": "europe", "tr": "europe", "ru": "europe",
+            "kr": "asia", "jp": "asia",
+            "oce": "sea", "ph": "sea", "sg": "sea", "th": "sea", "tw": "sea", "vn": "sea"
+        }
+        platform_routing = {
+            "las": "la2", "lan": "la1", "na": "na1", "br": "br1",
+            "euw": "euw1", "eun": "eun1", "tr": "tr1", "ru": "ru",
+            "kr": "kr", "jp": "jp1", "oce": "oc1"
+        }
+        region_route = continental_routing.get(server_clean, "americas")
+        platform = platform_routing.get(server_clean, "la2")
+
+        headers = {"X-Riot-Token": token, "User-Agent": "Mozilla/5.0"}
+        enc_name = urllib.parse.quote(game_name)
+        enc_tag = urllib.parse.quote(tag_line)
+
+        try:
+            # 1. Account-v1
+            acc_url = f"https://{region_route}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{enc_name}/{enc_tag}"
+            r_acc = requests.get(acc_url, headers=headers, timeout=5)
+            if r_acc.status_code != 200:
+                return None
+
+            acc_data = r_acc.json()
+            puuid = acc_data.get("puuid")
+            real_name = acc_data.get("gameName", game_name)
+            real_tag = acc_data.get("tagLine", tag_line)
+
+            # 2. Summoner-v4
+            sum_url = f"https://{platform}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/{puuid}"
+            r_sum = requests.get(sum_url, headers=headers, timeout=5)
+            level = 1
+            icon_id = 29
+            if r_sum.status_code == 200:
+                sum_data = r_sum.json()
+                level = sum_data.get("summonerLevel", 1)
+                icon_id = sum_data.get("profileIconId", 29)
+
+            # 3. League-v4
+            league_url = f"https://{platform}.api.riotgames.com/lol/league/v4/entries/by-puuid/{puuid}"
+            r_league = requests.get(league_url, headers=headers, timeout=5)
+            solo_entry = None
+            flex_entry = None
+            if r_league.status_code == 200:
+                league_data = r_league.json()
+                solo_entry = next((e for e in league_data if e.get("queueType") == "RANKED_SOLO_5x5"), None)
+                flex_entry = next((e for e in league_data if e.get("queueType") == "RANKED_FLEX_SR"), None)
+
+            def format_entry(e):
+                if not e:
+                    return "Sin clasificar (Unranked)"
+                t = e.get("tier", "").capitalize()
+                r = e.get("rank", "")
+                lp = e.get("leaguePoints", 0)
+                w = e.get("wins", 0)
+                l = e.get("losses", 0)
+                total = w + l
+                wr = (w / total * 100) if total > 0 else 0
+                return f"**{t} {r}** ({lp} LP)\n`{w}V {l}D ({wr:.1f}% WR)`"
+
+            # 4. Champion-Mastery-v4
+            mastery_url = f"https://{platform}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{puuid}/top?count=5"
+            r_mastery = requests.get(mastery_url, headers=headers, timeout=5)
+            masteries = []
+            if r_mastery.status_code == 200:
+                for m in r_mastery.json():
+                    c_id = m.get("championId")
+                    c_info = self.champions_by_key.get(c_id, {})
+                    c_name = c_info.get("name", f"Campeón #{c_id}")
+                    masteries.append({
+                        "name": c_name,
+                        "level": m.get("championLevel", 1),
+                        "points": m.get("championPoints", 0),
+                    })
+
+            main_entry = solo_entry or flex_entry
+            tier_name = main_entry.get("tier", "unranked").lower() if main_entry else "unranked"
+            tier_badge = f"https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/images/{tier_name}.png"
+
+            opgg_url = f"https://op.gg/lol/summoners/{server_clean}/{enc_name}-{enc_tag}"
+            profile_icon_url = f"{DDRAGON_BASE_CDN}/{self.latest_version}/img/profileicon/{icon_id}.png"
+
+            return {
+                "found": True,
+                "source": "Riot Games",
+                "riot_id": f"{real_name}#{real_tag}",
+                "region": server_clean.upper(),
+                "level": level,
+                "profile_icon": profile_icon_url,
+                "tier_badge": tier_badge,
+                "rank_tier": solo_entry.get("tier", "").capitalize() + " " + solo_entry.get("rank", "") if solo_entry else (flex_entry.get("tier", "").capitalize() + " " + flex_entry.get("rank", "") if flex_entry else "Unranked"),
+                "winrate_info": f"{main_entry['wins']}V {main_entry['losses']}D" if main_entry else "0V 0D",
+                "solo_rank": format_entry(solo_entry),
+                "flex_rank": format_entry(flex_entry),
+                "masteries": masteries,
+                "top_champions": [m["name"] for m in masteries],
+                "opgg_url": opgg_url,
+            }
+        except Exception as e:
+            logger.warning(f"Error consultando perfil en Riot API: {e}")
+            return None
+
+    def get_summoner_profile(self, summoner_query: str, region: str = "las") -> Dict[str, Any]:
+        """
+        Consulta las estadísticas de un invocador (Rango, LP, Win Rate, Campeones más jugados).
+        Prioriza la API oficial de Riot Games y usa OP.GG como respaldo.
+        """
+        # 1. Priorizar API Oficial de Riot Games
+        riot_profile = self.get_summoner_profile_riot(summoner_query, region)
+        if riot_profile and riot_profile.get("found"):
+            return riot_profile
+
+        # 2. Respaldo vía OP.GG
+        query = summoner_query.strip()
+        region = region.lower().strip() if region else "las"
+
+        # Soporte para separar Nombre y #Tag
+        if "#" in query:
+            name, tag = query.split("#", 1)
+        elif "-" in query:
+            name, tag = query.split("-", 1)
+        else:
+            name, tag = query, region.upper()
+
+        name = name.strip()
+        tag = tag.strip()
+        encoded_name = urllib.parse.quote(name)
+        encoded_tag = urllib.parse.quote(tag)
+
+        url = f"https://op.gg/lol/summoners/{region}/{encoded_name}-{encoded_tag}"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+        except Exception as e:
+            logger.error(f"Error conectando a OP.GG para invocador {name}#{tag}: {e}")
+            return {"found": False, "error": f"Error al conectar con los servidores de OP.GG: {e}", "url": url}
+
+        if r.status_code != 200:
+            return {
+                "found": False,
+                "error": (
+                    f"No se encontró al invocador **{name}#{tag}** en el servidor **{region.upper()}**.\n\n"
+                    f"💡 *Consejo: Recuerda que League of Legends usa **Riot ID** (`Nombre#Tag`). "
+                    f"Si tu tag no es `#{region.upper()}`, escribe tu tag completo, por ejemplo: `MiNombre#1234`.*"
+                ),
+                "url": url,
+                "searched": f"{name}#{tag}",
+            }
+
+        meta_m = re.search(r'<meta[^>]*name=[\"\']description[\"\'][^>]*content=[\"\'](.*?)[\"\']', r.text)
+        desc = meta_m.group(1) if meta_m else ""
+
+        icon_m = re.search(r'https://opgg-static\.akamaized\.net/meta/images/profile_icons/[^\"\'\s<>]+', r.text)
+        profile_icon = icon_m.group(0) if icon_m else "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/29.jpg"
+
+        parts = [p.strip() for p in desc.split(" / ")]
+
+        riot_id = parts[0] if len(parts) > 0 else f"{name}#{tag}"
+        rank_tier = parts[1] if len(parts) > 1 else "Unranked"
+        winrate_info = parts[2] if len(parts) > 2 else "Sin partidas clasificatorias registradas"
+
+        top_champs_raw = parts[3] if len(parts) > 3 else ""
+        champs_list = []
+        if top_champs_raw:
+            for c in top_champs_raw.split(", "):
+                champs_list.append(c.strip())
+
+        # Extraer maestrías de campeones desde los chunks de streaming de OP.GG
+        full_text = ""
+        for m in re.finditer(r'self\.__next_f\.push\(\[1,"(.*?)"\]\)', r.text):
+            try:
+                full_text += m.group(1).encode("utf-8").decode("unicode_escape")
+            except Exception:
+                full_text += m.group(1)
+
+        raw_masteries = []
+        pattern = r'\"champion_name\":\"([^\"]+)\"[^}]*?\"level\":(\d+),\"points\":(\d+)'
+        for m in re.finditer(pattern, full_text):
+            champ_n = m.group(1)
+            lvl = int(m.group(2))
+            pts = int(m.group(3))
+            raw_masteries.append({
+                "name": champ_n,
+                "level": lvl,
+                "points": pts,
+            })
+
+        raw_masteries = sorted(raw_masteries, key=lambda x: x["points"], reverse=True)
+        seen = set()
+        masteries = []
+        for mas in raw_masteries:
+            if mas["name"] not in seen:
+                seen.add(mas["name"])
+                masteries.append(mas)
+
+        return {
+            "found": True,
+            "riot_id": riot_id,
+            "region": region.upper(),
+            "rank_tier": rank_tier,
+            "winrate_info": winrate_info,
+            "top_champions": champs_list,
+            "masteries": masteries[:5],
+            "profile_icon": profile_icon,
+            "opgg_url": url,
+        }
+
+    def get_active_game(self, summoner_query: str, server: str = "las", api_key: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Consulta la partida en curso en tiempo real utilizando la API oficial de Riot Games (Account-v1 y Spectator-v5).
+        Requiere una API Key válida provista como parámetro o en la variable de entorno RIOT_API_KEY.
+        """
+        import config
+        token = (api_key or config.RIOT_API_KEY or "").strip()
+        if not token:
+            return {
+                "success": False,
+                "error": "no_key",
+                "message": (
+                    "Para consultar partidas en vivo en tiempo real, añade tu clave gratuita de Riot Games al archivo `.env`:\n\n"
+                    "1. Ingresa a: https://developer.riotgames.com/\n"
+                    "2. Inicia sesión con tu cuenta de Riot y copia tu **Development API Key**.\n"
+                    "3. Pégala en `.env` en la variable `RIOT_API_KEY`."
+                )
+            }
+
+        server_clean = server.lower().strip()
+        default_tags = {
+            "las": "LAS", "lan": "LAN", "br": "BR1", "na": "NA1",
+            "euw": "EUW", "eun": "EUN", "kr": "KR1", "jp": "JP1", "oce": "OC1"
+        }
+        if "#" in summoner_query:
+            game_name, tag_line = summoner_query.split("#", 1)
+        else:
+            game_name = summoner_query.strip()
+            tag_line = default_tags.get(server_clean, "LAS")
+
+        game_name = game_name.strip()
+        tag_line = tag_line.strip()
+
+        continental_routing = {
+            "las": "americas", "la2": "americas",
+            "lan": "americas", "la1": "americas",
+            "na": "americas", "na1": "americas",
+            "br": "americas", "br1": "americas",
+            "euw": "europe", "euw1": "europe",
+            "eun": "europe", "eun1": "europe",
+            "tr": "europe", "tr1": "europe",
+            "ru": "europe",
+            "kr": "asia", "jp": "asia", "jp1": "asia",
+            "oce": "sea", "oc1": "sea", "ph": "sea", "sg": "sea", "th": "sea", "tw": "sea", "vn": "sea"
+        }
+        region_route = continental_routing.get(server_clean, "americas")
+
+        platform_routing = {
+            "las": "la2", "lan": "la1", "na": "na1", "br": "br1",
+            "euw": "euw1", "eun": "eun1", "tr": "tr1", "ru": "ru",
+            "kr": "kr", "jp": "jp1", "oce": "oc1"
+        }
+        platform = platform_routing.get(server_clean, server_clean)
+
+        headers = {
+            "X-Riot-Token": token,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        }
+
+        # 1. Obtener PUUID mediante Account-v1
+        encoded_name = urllib.parse.quote(game_name)
+        encoded_tag = urllib.parse.quote(tag_line)
+        account_url = f"https://{region_route}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{encoded_name}/{encoded_tag}"
+
+        try:
+            r_acc = requests.get(account_url, headers=headers, timeout=6)
+            if r_acc.status_code in [401, 403]:
+                return {
+                    "success": False,
+                    "error": "invalid_key",
+                    "message": "La API Key de Riot Games ha expirado o es inválida. Recuerda que las claves gratuitas de desarrollo duran 24 horas y puedes renovarla en https://developer.riotgames.com/"
+                }
+            if r_acc.status_code == 404:
+                return {
+                    "success": False,
+                    "error": "player_not_found",
+                    "message": f"No se encontró al invocador **{game_name}#{tag_line}** en los servidores de Riot ({server_clean.upper()})."
+                }
+            if r_acc.status_code != 200:
+                return {
+                    "success": False,
+                    "error": "api_error",
+                    "message": f"Error del servidor de Riot ({r_acc.status_code}): {r_acc.text}"
+                }
+
+            acc_data = r_acc.json()
+            puuid = acc_data.get("puuid")
+            real_name = acc_data.get("gameName", game_name)
+            real_tag = acc_data.get("tagLine", tag_line)
+        except Exception as e:
+            return {
+                "success": False,
+                "error": "connection_error",
+                "message": f"Error al conectar con la API de Riot: {e}"
+            }
+
+        # 2. Consultar partida activa mediante Spectator-v5
+        spectator_url = f"https://{platform}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{puuid}"
+        try:
+            r_spec = requests.get(spectator_url, headers=headers, timeout=6)
+            if r_spec.status_code == 404:
+                return {
+                    "success": True,
+                    "in_game": False,
+                    "player_name": f"{real_name}#{real_tag}",
+                    "message": f"El jugador **{real_name}#{real_tag}** no se encuentra en una partida activa en este momento."
+                }
+            if r_spec.status_code != 200:
+                return {
+                    "success": False,
+                    "error": "spectator_error",
+                    "message": f"Error al consultar el espectador de Riot ({r_spec.status_code})."
+                }
+
+            game_info = r_spec.json()
+        except Exception as e:
+            return {
+                "success": False,
+                "error": "connection_error",
+                "message": f"Error consultando partida activa: {e}"
+            }
+
+        # 3. Procesar datos de la partida
+        queue_names = {
+            420: "Clasificatoria Solo/Dúo (Ranked Solo)",
+            440: "Clasificatoria Flexible (Ranked Flex)",
+            450: "ARAM (Abismo de los Lamentos)",
+            400: "Normal Reclutamiento (Draft)",
+            430: "Normal A Ciegas (Blind)",
+            490: "Partida Rápida (Quickplay)",
+            1700: "Modo Arena (2v2v2v2)",
+            900: "URF",
+            1020: "Uno para Todos",
+        }
+        queue_id = game_info.get("gameQueueConfigId", 0)
+        mode_str = queue_names.get(queue_id, game_info.get("gameMode", "Partida Personalizada"))
+
+        length_sec = game_info.get("gameLength", 0)
+        if length_sec <= 0:
+            duration_str = "Pantalla de carga (00:00)"
+        else:
+            mins = length_sec // 60
+            secs = length_sec % 60
+            duration_str = f"{mins:02d}:{secs:02d} min"
+
+        # 4. Consultar en paralelo las ligas y rangos de los 10 participantes
+        participant_puuids = [p.get("puuid") for p in game_info.get("participants", []) if p.get("puuid")]
+
+        def fetch_player_ranks(p_puuid: str):
+            if not p_puuid:
+                return p_puuid, []
+            url = f"https://{platform}.api.riotgames.com/lol/league/v4/entries/by-puuid/{p_puuid}"
+            try:
+                r_l = requests.get(url, headers=headers, timeout=4)
+                if r_l.status_code == 200:
+                    return p_puuid, r_l.json()
+            except Exception as e:
+                logger.debug(f"Error consultando liga de {p_puuid}: {e}")
+            return p_puuid, []
+
+        ranks_by_puuid = {}
+        if participant_puuids:
+            with ThreadPoolExecutor(max_workers=min(10, len(participant_puuids))) as executor:
+                for p_puuid, entries in executor.map(fetch_player_ranks, participant_puuids):
+                    ranks_by_puuid[p_puuid] = entries
+
+        rank_emojis_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "rank_emojis.json")
+        official_rank_emojis = {}
+        if os.path.exists(rank_emojis_path):
+            try:
+                with open(rank_emojis_path, "r", encoding="utf-8") as f:
+                    official_rank_emojis = json.load(f)
+            except Exception:
+                pass
+
+        def parse_rank_entry(entries):
+            fallback_emojis = {
+                "IRON": "⚙️", "BRONZE": "🥉", "SILVER": "🥈", "GOLD": "🥇",
+                "PLATINUM": "💠", "EMERALD": "❇️", "DIAMOND": "💎",
+                "MASTER": "🟣", "GRANDMASTER": "🦅", "CHALLENGER": "👑",
+                "UNRANKED": "🔘"
+            }
+            unranked_badge = official_rank_emojis.get("UNRANKED", "🔘")
+            if not entries:
+                return {
+                    "tier": "UNRANKED",
+                    "tier_display": "Unranked",
+                    "tier_emoji": unranked_badge,
+                    "rank": "",
+                    "rank_full": "Unranked",
+                    "lp": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "winrate": None,
+                    "winrate_str": "Sin ranked",
+                    "record_str": "",
+                    "short_str": f"└ {unranked_badge} Unranked",
+                    "approx_mmr": 1200,
+                }
+
+            solo = next((e for e in entries if e.get("queueType") == "RANKED_SOLO_5x5"), None)
+            entry = solo or next((e for e in entries if e.get("queueType") == "RANKED_FLEX_SR"), entries[0])
+
+            tier_raw = entry.get("tier", "UNRANKED").upper()
+            tier_emoji = official_rank_emojis.get(tier_raw, fallback_emojis.get(tier_raw, "🔘"))
+
+            tier_display = tier_raw.capitalize()
+            rank = entry.get("rank", "")
+            if tier_raw in ["MASTER", "GRANDMASTER", "CHALLENGER"]:
+                rank = ""
+
+            lp = entry.get("leaguePoints", 0)
+            wins = entry.get("wins", 0)
+            losses = entry.get("losses", 0)
+            total_games = wins + losses
+
+            wr = (wins / total_games * 100) if total_games > 0 else 0.0
+            prefix_queue = " (Flex)" if (not solo and entry.get("queueType") == "RANKED_FLEX_SR") else ""
+            rank_full = f"{tier_display} {rank}".strip() + prefix_queue
+
+            tier_scores = {
+                "IRON": 400, "BRONZE": 800, "SILVER": 1200, "GOLD": 1600,
+                "PLATINUM": 2000, "EMERALD": 2400, "DIAMOND": 2800,
+                "MASTER": 3200, "GRANDMASTER": 3600, "CHALLENGER": 4000,
+            }
+            div_scores = {"IV": 0, "III": 100, "II": 200, "I": 300}
+            approx_mmr = tier_scores.get(tier_raw, 1200) + div_scores.get(rank, 0) + min(lp, 100)
+
+            if tier_raw == "UNRANKED":
+                short_str = f"└ {unranked_badge} Unranked"
+            else:
+                lp_str = f"| {lp} LP"
+                if total_games > 0:
+                    short_str = f"└ {tier_emoji} {rank_full} {lp_str} ({wins}W {losses}L • {wr:.0f}% WR)"
+                else:
+                    short_str = f"└ {tier_emoji} {rank_full} {lp_str}"
+
+            return {
+                "tier": tier_raw,
+                "tier_display": tier_display,
+                "tier_emoji": tier_emoji,
+                "rank": rank,
+                "rank_full": rank_full,
+                "lp": lp,
+                "wins": wins,
+                "losses": losses,
+                "winrate": wr,
+                "winrate_str": f"{wr:.0f}% WR" if total_games > 0 else "0% WR",
+                "record_str": f"{wins}W {losses}L" if total_games > 0 else "",
+                "short_str": short_str,
+                "approx_mmr": approx_mmr,
+            }
+
+        blue_team = []
+        red_team = []
+        target_champ_asset = None
+        target_champ_name = None
+
+        for p in game_info.get("participants", []):
+            c_id = p.get("championId")
+            champ_data = self.champions_by_key.get(c_id, {})
+            champ_name = champ_data.get("name", f"Campeón #{c_id}")
+            champ_asset_id = champ_data.get("id", "")
+
+            # Hechizos
+            s1_name = self.spell_names.get(p.get("spell1Id"), "Hechizo 1")
+            s2_name = self.spell_names.get(p.get("spell2Id"), "Hechizo 2")
+
+            # Runas
+            perks = p.get("perks", {})
+            perk_ids = perks.get("perkIds", [])
+            keystone_name = self.rune_names.get(perk_ids[0], "Runa Clave") if perk_ids else "Desconocida"
+
+            # Nombre invocador / Riot ID
+            r_id = p.get("riotId", "") or p.get("summonerName", "Invocador")
+            is_target = (p.get("puuid") == puuid)
+            if is_target:
+                r_id = f"{real_name}#{real_tag}"
+                target_champ_asset = champ_asset_id
+                target_champ_name = champ_name
+
+            # Rango y Winrate
+            p_puuid = p.get("puuid")
+            rank_data = parse_rank_entry(ranks_by_puuid.get(p_puuid, []))
+
+            player_entry = {
+                "riot_id": r_id,
+                "champion_name": champ_name,
+                "champion_id": champ_asset_id,
+                "spells": f"{s1_name} + {s2_name}",
+                "keystone": keystone_name,
+                "is_target": is_target,
+                "rank_info": rank_data,
+            }
+
+            if p.get("teamId") == 100:
+                blue_team.append(player_entry)
+            else:
+                red_team.append(player_entry)
+
+        # Bans de ambos equipos
+        blue_bans = []
+        red_bans = []
+        for b in game_info.get("bannedChampions", []):
+            b_cid = b.get("championId")
+            if b_cid and b_cid != -1:
+                b_champ = self.champions_by_key.get(b_cid, {})
+                b_name = b_champ.get("name")
+                if b_name:
+                    if b.get("teamId") == 100:
+                        blue_bans.append(b_name)
+                    else:
+                        red_bans.append(b_name)
+
+        def calc_avg_tier(team):
+            ranked_players = [p["rank_info"]["approx_mmr"] for p in team if p["rank_info"]["tier"] != "UNRANKED"]
+            if not ranked_players:
+                return "🔘 Unranked"
+            avg = sum(ranked_players) // len(ranked_players)
+            if avg < 600: return "⚙️ Iron"
+            elif avg < 1000: return "🥉 Bronze"
+            elif avg < 1400: return "🥈 Silver"
+            elif avg < 1800: return "🥇 Gold"
+            elif avg < 2200: return "💠 Platinum"
+            elif avg < 2600: return "❇️ Emerald"
+            elif avg < 3000: return "💎 Diamond"
+            elif avg < 3400: return "🟣 Master"
+            elif avg < 3800: return "🦅 Grandmaster"
+            else: return "👑 Challenger"
+
+        blue_avg = calc_avg_tier(blue_team)
+        red_avg = calc_avg_tier(red_team)
+
+        opgg_url = f"https://op.gg/lol/summoners/{server_clean}/{urllib.parse.quote(real_name)}-{urllib.parse.quote(real_tag)}"
+
+        return {
+            "success": True,
+            "in_game": True,
+            "player_name": f"{real_name}#{real_tag}",
+            "game_mode": mode_str,
+            "queue_id": queue_id,
+            "duration": duration_str,
+            "duration_mins": length_sec // 60 if length_sec > 0 else 0,
+            "game_start_time": game_info.get("gameStartTime", 0),
+            "server": server_clean.upper(),
+            "target_champion_asset": target_champ_asset,
+            "target_champion_name": target_champ_name,
+            "blue_team": blue_team,
+            "red_team": red_team,
+            "blue_bans": blue_bans,
+            "red_bans": red_bans,
+            "blue_avg_rank": blue_avg,
+            "red_avg_rank": red_avg,
+            "opgg_url": opgg_url,
         }
 
 

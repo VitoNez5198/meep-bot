@@ -32,6 +32,9 @@ if not exist ".env" (
 )
 
 echo Iniciando Meep...
+echo [TIP] Si prefieres que Meep corra oculto en segundo plano junto al reloj,
+echo       puedes hacer doble clic en 'iniciar_meep_segundo_plano.vbs'.
+echo.
 echo Presiona Ctrl + C en esta ventana para apagar el bot.
 echo.
 python main.py

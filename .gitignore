@@ -1,16 +1,65 @@
+# ==========================================
 # Entorno y credenciales privadas
+# ==========================================
 .env
+.env.*
+!.env.example
+*.key
+*.pem
+*.cert
+*.token
+*cookies*.txt
+
+# ==========================================
+# Entornos virtuales Python
+# ==========================================
 .venv/
+venv/
+ENV/
 env/
 
-# Python cache
+# ==========================================
+# Python cache y compilados
+# ==========================================
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Binarios locales
+# ==========================================
+# Binarios y ejecutables locales
+# ==========================================
 bin/
 *.exe
+*.dll
+*.dylib
 
-# Cache de iconos
-cache/
+# ==========================================
+# Archivos de caché y logs en runtime
+# ==========================================
+data/cache/
+**/cache/
+*.log
+data/*.log
+logs/
+
+# ==========================================
+# Scripts temporales y scratchpads
+# ==========================================
+scratch/
+temp/
+tmp/
+
+# ==========================================
+# Sistema Operativo e IDEs
+# ==========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo

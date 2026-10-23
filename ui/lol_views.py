@@ -109,7 +109,7 @@ async def create_champion_embed(
     )
 
     footer_icon = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/29.jpg"
-    embed.set_footer(text=f"Parche {display_patch} • Powered by Riot DataDragon • Meep Assistant", icon_url=footer_icon)
+    embed.set_footer(text=f"Parche {display_patch} • OP.GG & DataDragon • Creado por VitoNez", icon_url=footer_icon)
 
     return embed
 
@@ -162,14 +162,13 @@ class BuildVariantView(discord.ui.View):
                 button.callback = self._create_callback(idx)
                 self.add_item(button)
 
-        # Botones de enlace directo estilo PoroScout ("Ver en U.GG" y "Ver en OP.GG")
-        ugg_url = f"https://u.gg/lol/champions/{self.champ_id.lower()}/build"
-        opgg_url = f"https://www.op.gg/champions/{self.champ_id.lower()}/build"
+        # Botón de enlace directo oficial a OP.GG solicitado por el usuario
+        champ_key = self.champ_id.lower()
         if self.mode.lower() == "aram":
-            ugg_url = f"https://u.gg/lol/champions/aram/{self.champ_id.lower()}-aram"
-            opgg_url = f"https://www.op.gg/modes/aram/{self.champ_id.lower()}/build"
+            opgg_url = f"https://op.gg/lol/modes/aram/{champ_key}/build"
+        else:
+            opgg_url = f"https://op.gg/lol/champions/{champ_key}/build"
 
-        self.add_item(discord.ui.Button(label="Ver en U.GG", url=ugg_url, style=discord.ButtonStyle.link))
         self.add_item(discord.ui.Button(label="Ver en OP.GG", url=opgg_url, style=discord.ButtonStyle.link))
 
     def _create_callback(self, target_idx: int):

@@ -22,8 +22,10 @@ logger = logging.getLogger("meep.emoji")
 DDRAGON_BASE_CDN = "https://ddragon.leagueoflegends.com/cdn"
 CACHE_ITEMS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "cache", "items")
 CACHE_RUNES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "cache", "runes")
+CACHE_CHAMPS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "cache", "champions")
 os.makedirs(CACHE_ITEMS_DIR, exist_ok=True)
 os.makedirs(CACHE_RUNES_DIR, exist_ok=True)
+os.makedirs(CACHE_CHAMPS_DIR, exist_ok=True)
 
 
 def _normalize_name(text: str) -> str:
@@ -103,16 +105,19 @@ class EmojiService:
                 self._usage_order.append(emoji_name)
                 return str(self._cache[emoji_name])
 
-            # Si necesitamos hacer espacio (máximo 48 emojis para margen de seguridad)
-            if len(self._cache) >= 48 and self._usage_order:
-                oldest_name = self._usage_order.pop(0)
-                old_em = self._cache.pop(oldest_name, None)
-                if old_em:
-                    try:
-                        await old_em.delete()
-                        logger.info(f"Emoji {oldest_name} rotado (eliminado) para liberar espacio.")
-                    except Exception as ex:
-                        logger.warning(f"Error eliminando emoji antiguo {oldest_name}: {ex}")
+            # Si necesitamos hacer espacio (máximo 46 emojis para margen de seguridad, nunca borrar rangos t_)
+            if len(self._cache) >= 46 and self._usage_order:
+                candidates = [n for n in self._usage_order if not n.startswith("t_")]
+                if candidates:
+                    oldest_name = candidates[0]
+                    self._usage_order.remove(oldest_name)
+                    old_em = self._cache.pop(oldest_name, None)
+                    if old_em:
+                        try:
+                            await old_em.delete()
+                            logger.info(f"Emoji {oldest_name} rotado (eliminado) para liberar espacio.")
+                        except Exception as ex:
+                            logger.warning(f"Error eliminando emoji antiguo {oldest_name}: {ex}")
 
             # Obtener imagen desde caché local en disco o descargar si faltara
             try:
@@ -176,14 +181,17 @@ class EmojiService:
                 self._usage_order.append(emoji_name)
                 return str(self._cache[emoji_name])
 
-            if len(self._cache) >= 48 and self._usage_order:
-                oldest_name = self._usage_order.pop(0)
-                old_em = self._cache.pop(oldest_name, None)
-                if old_em:
-                    try:
-                        await old_em.delete()
-                    except Exception:
-                        pass
+            if len(self._cache) >= 46 and self._usage_order:
+                candidates = [n for n in self._usage_order if not n.startswith("t_")]
+                if candidates:
+                    oldest_name = candidates[0]
+                    self._usage_order.remove(oldest_name)
+                    old_em = self._cache.pop(oldest_name, None)
+                    if old_em:
+                        try:
+                            await old_em.delete()
+                        except Exception:
+                            pass
 
             try:
                 rune_filename = os.path.basename(icon_path)
@@ -217,6 +225,68 @@ class EmojiService:
                 logger.warning(f"No se pudo crear emoji para runa {rune_name}: {e}")
 
         return "🔹"
+
+    async def get_champion_emoji(self, champ_asset_id: str, version: Optional[str] = None) -> str:
+        """Obtiene o crea un emoji de Discord para un campeón de LoL."""
+        if not champ_asset_id:
+            return "👤"
+        if not self._initialized:
+            await self.initialize(version)
+
+        emoji_name = f"c_{champ_asset_id.lower()[:28]}"
+
+        async with self._lock:
+            if emoji_name in self._cache:
+                if emoji_name in self._usage_order:
+                    self._usage_order.remove(emoji_name)
+                self._usage_order.append(emoji_name)
+                return str(self._cache[emoji_name])
+
+            if len(self._cache) >= 46 and self._usage_order:
+                candidates = [n for n in self._usage_order if not n.startswith("t_")]
+                if candidates:
+                    oldest_name = candidates[0]
+                    self._usage_order.remove(oldest_name)
+                    old_em = self._cache.pop(oldest_name, None)
+                    if old_em:
+                        try:
+                            await old_em.delete()
+                        except Exception:
+                            pass
+
+            try:
+                v = version or lol_service.latest_version
+                local_path = os.path.join(CACHE_CHAMPS_DIR, f"{champ_asset_id}.png")
+                img_data = None
+                if os.path.exists(local_path) and os.path.getsize(local_path) > 100:
+                    with open(local_path, "rb") as f:
+                        img_data = f.read()
+                else:
+                    url = f"{DDRAGON_BASE_CDN}/{v}/img/champion/{champ_asset_id}.png"
+                    r = requests.get(url, timeout=4)
+                    if r.status_code == 200:
+                        img_data = r.content
+                        with open(local_path, "wb") as f:
+                            f.write(img_data)
+
+                if img_data:
+                    img = Image.open(io.BytesIO(img_data)).convert("RGBA")
+                    img = img.resize((48, 48), Image.Resampling.LANCZOS)
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    buf.seek(0)
+
+                    new_em = await self.bot.create_application_emoji(
+                        name=emoji_name,
+                        image=buf.getvalue(),
+                    )
+                    self._cache[emoji_name] = new_em
+                    self._usage_order.append(emoji_name)
+                    return str(new_em)
+            except Exception as e:
+                logger.debug(f"No se pudo crear emoji para campeón {champ_asset_id}: {e}")
+
+        return "👤"
 
 
 _emoji_service_instance: Optional[EmojiService] = None

@@ -30,10 +30,15 @@ local_ffmpeg = BIN_DIR / "ffmpeg.exe"
 if local_ffmpeg.exists():
     FFMPEG_EXE = str(local_ffmpeg)
 
-# Colores temáticos para Embeds (Estilo Bardo / Meep místico)
+# Colores temáticos para Embeds (Estilo Bardo / Meep místico con tonos morados)
 COLOR_MEEP = 0xF1C40F      # Dorado místico
-COLOR_LOL = 0x0AC8B9       # Cyan Hextech de League of Legends
-COLOR_ARAM = 0x1E90FF      # Azul gélido de Abismo de los Lamentos
+COLOR_LOL = 0x8B5CF6       # Violeta / Morado estético (estilo OP.GG & Meep)
+COLOR_ARAM = 0x9333EA      # Morado eléctrico para ARAM
 COLOR_MUSIC = 0x9B59B6     # Púrpura melódico
 COLOR_ERROR = 0xE74C3C     # Rojo de error
 COLOR_SUCCESS = 0x2ECC71   # Verde de éxito
+
+# Presencia / Estado de Discord
+BOT_DEFAULT_STATUS = "/champion (!c) ~ /play (!p)"
+BOT_DESCRIPTION = "Música & League of Legends"
+
