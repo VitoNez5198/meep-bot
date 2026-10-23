@@ -37,27 +37,31 @@ YTDL_BASE_OPTIONS = {
 
 # Detección automática de cookies para evitar bloqueos en AWS / VPS ("Sign in to confirm you're not a bot")
 _COOKIES_PATH = None
-for _cand in [
+_cookie_candidates = [
     os.getenv("YOUTUBE_COOKIES_FILE"),
-    os.path.join(config.BASE_DIR, "cookies.txt"),
-    os.path.join(config.BASE_DIR, "data", "cookies.txt"),
-    os.path.join(os.path.expanduser("~"), "cookies.txt"),
-    os.path.join(os.path.expanduser("~"), "meep-bot", "cookies.txt"),
-]:
+    str(config.BASE_DIR / "cookies.txt"),
+    str(config.BASE_DIR / "data" / "cookies.txt"),
+    os.path.expanduser("~/cookies.txt"),
+    os.path.expanduser("~/meep-bot/cookies.txt"),
+    os.path.expanduser("~/bot_discord_2/cookies.txt"),
+    "/home/ubuntu/meep-bot/cookies.txt",
+    "/home/ubuntu/cookies.txt",
+]
+
+for _cand in _cookie_candidates:
     if _cand and os.path.isfile(_cand):
-        _COOKIES_PATH = _cand
-        break
+        try:
+            if os.path.getsize(_cand) > 0:
+                _COOKIES_PATH = _cand
+                break
+        except Exception:
+            pass
 
 if _COOKIES_PATH:
     YTDL_BASE_OPTIONS["cookiefile"] = _COOKIES_PATH
     logger.info(f"Cargadas cookies de YouTube para yt-dlp desde: {_COOKIES_PATH}")
 else:
-    # Si no hay cookies, intentar con clientes alternativos como fallback
-    YTDL_BASE_OPTIONS["extractor_args"] = {
-        "youtube": {
-            "player_client": ["android", "ios", "web"]
-        }
-    }
+    logger.warning("No se detectó archivo 'cookies.txt'. Si YouTube bloquea la IP, coloca 'cookies.txt' en la carpeta del bot.")
 
 FFMPEG_OPTIONS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -602,10 +606,9 @@ class MusicService:
 
     def _parse_spotify_embed(self, url: str, requester: str) -> List[Track]:
         """Parsea el embed público de Spotify y su bloque __NEXT_DATA__."""
-        embed_url = url
-        if "open.spotify.com/embed/" not in url:
-            embed_url = url.replace("open.spotify.com/", "open.spotify.com/embed/")
-        embed_url = embed_url.split("?")[0]
+        # Limpiar prefijos regionales (ej. /intl-es/, /intl-pt/) para que el embed sea válido
+        clean_url = re.sub(r"open\.spotify\.com/(?:embed/)?(?:intl-[a-z]+(?:-[a-z]+)?/)?", "open.spotify.com/embed/", url)
+        embed_url = clean_url.split("?")[0]
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
