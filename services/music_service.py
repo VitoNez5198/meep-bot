@@ -32,7 +32,27 @@ YTDL_BASE_OPTIONS = {
     "quiet": True,
     "no_warnings": True,
     "source_address": "0.0.0.0",
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["android", "ios", "web"]
+        }
+    },
 }
+
+# Detección automática de cookies para evitar bloqueos en AWS / VPS ("Sign in to confirm you're not a bot")
+_COOKIES_PATH = None
+for _cand in [
+    os.getenv("YOUTUBE_COOKIES_FILE"),
+    os.path.join(config.BASE_DIR, "cookies.txt"),
+    os.path.join(config.BASE_DIR, "data", "cookies.txt"),
+]:
+    if _cand and os.path.isfile(_cand):
+        _COOKIES_PATH = _cand
+        break
+
+if _COOKIES_PATH:
+    YTDL_BASE_OPTIONS["cookiefile"] = _COOKIES_PATH
+    logger.info(f"Cargadas cookies de YouTube para yt-dlp desde: {_COOKIES_PATH}")
 
 FFMPEG_OPTIONS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
