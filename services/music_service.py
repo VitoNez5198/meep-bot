@@ -25,19 +25,13 @@ logger = logging.getLogger("meep.music")
 
 # Opciones de yt-dlp para streaming rápido directo sin descarga a disco
 YTDL_BASE_OPTIONS = {
-    "format": "bestaudio/best",
-    "extractaudio": True,
+    "format": "bestaudio/best[height<=480]/ba/b",
     "nocheckcertificate": True,
     "ignoreerrors": True,
     "logtostderr": False,
     "quiet": True,
     "no_warnings": True,
     "source_address": "0.0.0.0",
-    "extractor_args": {
-        "youtube": {
-            "player_client": ["android", "ios", "web"]
-        }
-    },
 }
 
 # Detección automática de cookies para evitar bloqueos en AWS / VPS ("Sign in to confirm you're not a bot")
@@ -46,6 +40,8 @@ for _cand in [
     os.getenv("YOUTUBE_COOKIES_FILE"),
     os.path.join(config.BASE_DIR, "cookies.txt"),
     os.path.join(config.BASE_DIR, "data", "cookies.txt"),
+    os.path.join(os.path.expanduser("~"), "cookies.txt"),
+    os.path.join(os.path.expanduser("~"), "meep-bot", "cookies.txt"),
 ]:
     if _cand and os.path.isfile(_cand):
         _COOKIES_PATH = _cand
@@ -54,6 +50,13 @@ for _cand in [
 if _COOKIES_PATH:
     YTDL_BASE_OPTIONS["cookiefile"] = _COOKIES_PATH
     logger.info(f"Cargadas cookies de YouTube para yt-dlp desde: {_COOKIES_PATH}")
+else:
+    # Si no hay cookies, intentar con clientes alternativos como fallback
+    YTDL_BASE_OPTIONS["extractor_args"] = {
+        "youtube": {
+            "player_client": ["android", "ios", "web"]
+        }
+    }
 
 FFMPEG_OPTIONS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
