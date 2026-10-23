@@ -24,8 +24,9 @@ from services.tray_service import tray_manager
 logger = logging.getLogger("meep.music")
 
 # Opciones de yt-dlp para streaming rápido directo sin descarga a disco
+# Nota: No fijamos 'format' aquí para que yt-dlp extraiga todos los formatos sin
+# fallar con 'Requested format is not available'; la selección óptima se hace en _get_best_audio_stream
 YTDL_BASE_OPTIONS = {
-    "format": "bestaudio/best[height<=480]/ba/b",
     "nocheckcertificate": True,
     "ignoreerrors": True,
     "logtostderr": False,
@@ -776,11 +777,34 @@ class MusicService:
     def _get_best_audio_stream(self, info: dict) -> Optional[str]:
         """Obtiene la mejor URL directa de streaming de audio desde el diccionario de info."""
         stream_url = info.get("url")
-        if not stream_url and "formats" in info:
-            audio_formats = [f for f in info["formats"] if f.get("acodec") != "none"]
-            if audio_formats:
-                stream_url = audio_formats[-1]["url"]
-        return stream_url
+        if stream_url:
+            return stream_url
+
+        formats = info.get("formats", [])
+        if not formats:
+            return None
+
+        # 1. Preferir formatos que sean solo de audio y tengan URL directa
+        audio_only = [
+            f for f in formats
+            if f.get("url")
+            and f.get("acodec") not in ("none", None)
+            and f.get("vcodec") in ("none", None)
+        ]
+        if audio_only:
+            return audio_only[-1]["url"]
+
+        # 2. Si no hay solo audio, cualquier formato con audio (FFmpeg descarta video con -vn)
+        any_audio = [
+            f for f in formats
+            if f.get("url") and f.get("acodec") not in ("none", None)
+        ]
+        if any_audio:
+            return any_audio[-1]["url"]
+
+        # 3. Fallback a cualquier formato con URL válida
+        valid_urls = [f["url"] for f in formats if f.get("url")]
+        return valid_urls[-1] if valid_urls else None
 
     async def resolve_stream_for_track(self, track: Track) -> Optional[Track]:
         """
