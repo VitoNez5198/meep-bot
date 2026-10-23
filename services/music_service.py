@@ -5,6 +5,7 @@ resolución perezosa (Lazy Loading) de streams, soporte para playlists
 completas (YouTube, YouTube Music y Spotify) y heurística de audio de estudio (sin intros).
 """
 
+import os
 import time
 import random
 import asyncio
