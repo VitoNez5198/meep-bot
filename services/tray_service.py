@@ -9,10 +9,16 @@ import sys
 import asyncio
 import subprocess
 import logging
-from typing import Optional
-import pystray
+from typing import Optional, Any
 from PIL import Image, ImageDraw
 import discord
+
+pystray = None
+if sys.platform.startswith("win"):
+    try:
+        import pystray
+    except Exception as e:
+        pystray = None
 
 logger = logging.getLogger("meep.tray")
 
@@ -83,7 +89,7 @@ def _ensure_icon_exists() -> str:
 class TrayManager:
     def __init__(self, bot: Optional[discord.Client] = None):
         self.bot = bot
-        self.icon: Optional[pystray.Icon] = None
+        self.icon: Optional[Any] = None
         self._status_text = "🟡 Conectando a Discord..."
 
     def set_bot(self, bot: discord.Client):
@@ -91,6 +97,8 @@ class TrayManager:
 
     def _build_menu(self):
         """Construye el menú contextual de la bandeja del sistema."""
+        if pystray is None:
+            return None
         def on_open_logs(icon, item):
             if os.path.exists(LOG_PATH):
                 os.startfile(LOG_PATH)
@@ -152,8 +160,8 @@ class TrayManager:
 
     def start(self):
         """Inicia el icono de la bandeja del sistema en segundo plano (solo en Windows)."""
-        if not sys.platform.startswith("win"):
-            logger.info("Sistema no-Windows detectado (Linux/Servidor). Bandeja del sistema omitida.")
+        if not sys.platform.startswith("win") or pystray is None:
+            logger.info("Sistema no-Windows detectado o entorno sin interfaz gráfica. Bandeja del sistema omitida.")
             return
 
         try:
